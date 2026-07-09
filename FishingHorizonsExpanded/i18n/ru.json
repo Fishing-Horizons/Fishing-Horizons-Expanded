@@ -1,12 +1,13 @@
 {
     "item.journal.name": "Дневник рыбака",
     "item.journal.description": "Крепкий дневник для учёта всей рыбы в долине. Возьмите в руки и нажмите ПКМ, чтобы научиться им пользоваться.",
-
     "message.journal-unlocked": "Дневник изучен! Нажмите {{key}}, чтобы открыть Дневник рыбака.",
-
     "menu.journal.title": "Дневник рыбака",
-    "menu.journal.coming-soon": "Страницы пока пусты...",
-
+    "menu.journal.turn-page-hint": "Листайте стрелками, чтобы посмотреть список рыб.",
+    "menu.journal.section.vanilla": "Ванильные",
+    "menu.journal.unknown-fish": "???",
+    "menu.journal.caught-count": "Поймано: {{count}}",
+    "menu.journal.not-caught-hint": "Ещё не поймана",
     "config.section.journal": "Дневник рыбака",
     "config.enable-journal.name": "Включить дневник",
     "config.enable-journal.tooltip": "Включает механику «Дневник рыбака».",

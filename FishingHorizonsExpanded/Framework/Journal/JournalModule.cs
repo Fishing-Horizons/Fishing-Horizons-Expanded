@@ -199,7 +199,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
         private void OpenJournal()
         {
             Game1.playSound("bigSelect");
-            Game1.activeClickableMenu = new JournalMenu(this.Mod.Helper.Translation);
+            Game1.activeClickableMenu = new JournalMenu(this.Mod.Helper.Translation, this.Mod.Helper.ModRegistry);
         }
     }
 }
