@@ -1,12 +1,13 @@
 {
     "item.journal.name": "Fisherman's Journal",
     "item.journal.description": "A sturdy journal for tracking every fish in the valley. Hold it and right-click to learn how to use it.",
-
     "message.journal-unlocked": "Journal learned! Press {{key}} to open the Fisherman's Journal.",
-
     "menu.journal.title": "Fisherman's Journal",
-    "menu.journal.coming-soon": "The pages are still empty...",
-
+    "menu.journal.turn-page-hint": "Use the arrows to browse the fish list.",
+    "menu.journal.section.vanilla": "Vanilla",
+    "menu.journal.unknown-fish": "???",
+    "menu.journal.caught-count": "Caught: {{count}}",
+    "menu.journal.not-caught-hint": "Not caught yet",
     "config.section.journal": "Fisherman's Journal",
     "config.enable-journal.name": "Enable Journal",
     "config.enable-journal.tooltip": "Whether the Fisherman's Journal mechanic is enabled.",
