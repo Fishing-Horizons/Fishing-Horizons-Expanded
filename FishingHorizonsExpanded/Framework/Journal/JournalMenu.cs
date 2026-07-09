@@ -14,7 +14,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
     /// <summary>The Fisherman's Journal book menu.</summary>
     /// <remarks>
     /// Layout: a two-page spread. Spread 0 is the title page; the following spreads list
-    /// all fish (4 per page, 8 per spread) grouped into sections by source mod.
+    /// all fish grouped into sections by source mod. Every list page is a 2×2 grid (4 fish).
+    /// Each section starts at the top of a fresh page with its title at the page's top edge;
+    /// on such pages the fish grid starts slightly lower to make room for the title.
     /// Uncaught fish are shown as black silhouettes with their name hidden.
     /// Clicking a fish opens its detail spread: stats on the left page, where/when info on the right.
     /// </remarks>
@@ -29,8 +31,8 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>The menu height in UI pixels.</summary>
         private const int MenuHeight = 660;
 
-        /// <summary>The number of cells (fish or section headers) per single page.</summary>
-        private const int CellsPerPage = 4;
+        /// <summary>The number of fish per single page (2×2 grid).</summary>
+        private const int FishPerPage = 4;
 
         /// <summary>The sprite draw scale (16px sprites → 64px).</summary>
         private const float SpriteScale = 4f;
@@ -45,8 +47,8 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>The tracked journal progress (sold/gifted/best quality).</summary>
         private readonly ProgressTracker Progress;
 
-        /// <summary>The flat list of cells: section headers and fish entries.</summary>
-        private readonly List<Cell> Cells = new();
+        /// <summary>The prebuilt list pages. Each section starts on a fresh page with its title.</summary>
+        private readonly List<Page> Pages = new();
 
         /// <summary>The current spread index (0 = title spread).</summary>
         private int Spread;
@@ -66,8 +68,8 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>The back button shown on the detail spread.</summary>
         private readonly ClickableTextureComponent BackButton;
 
-        /// <summary>A cell in the fish list: either a section header or a fish entry.</summary>
-        private readonly record struct Cell(string? Header, FishEntry? Fish);
+        /// <summary>A single list page: an optional section title (only on the section's first page) and up to <see cref="FishPerPage"/> fish.</summary>
+        private sealed record Page(string? Header, List<FishEntry> Fish);
 
 
         /*********
@@ -84,16 +86,20 @@ namespace FishingHorizonsExpanded.Framework.Journal
             this.I18n = i18n;
             this.Progress = progress;
 
-            // build the fish list
+            // build the list pages: each section starts on a fresh page with its title,
+            // then continues with untitled pages of 4 fish until the section ends
             foreach (JournalSection section in FishRegistry.BuildSections(modRegistry, i18n.Get("menu.journal.section.vanilla")))
             {
-                this.Cells.Add(new Cell(section.Title, null));
-                foreach (FishEntry fish in section.Fish)
-                    this.Cells.Add(new Cell(null, fish));
+                for (int i = 0; i < section.Fish.Count; i += FishPerPage)
+                {
+                    this.Pages.Add(new Page(
+                        Header: i == 0 ? section.Title : null,
+                        Fish: section.Fish.Skip(i).Take(FishPerPage).ToList()
+                    ));
+                }
             }
 
-            int listPages = (int)Math.Ceiling(this.Cells.Count / (double)CellsPerPage);
-            this.SpreadCount = 1 + (int)Math.Ceiling(listPages / 2.0);
+            this.SpreadCount = 1 + (int)Math.Ceiling(this.Pages.Count / 2.0);
 
             // navigation buttons
             this.PrevArrow = new ClickableTextureComponent(
@@ -234,86 +240,102 @@ namespace FishingHorizonsExpanded.Framework.Journal
             );
         }
 
-        /// <summary>Get the bounds of a cell slot on a page.</summary>
-        private Rectangle GetCellBounds(int pageX, int pageWidth, int slot)
+        /// <summary>The height reserved at the top of a page for a section title.</summary>
+        private const int HeaderHeight = 56;
+
+        /// <summary>Get the bounds of a fish slot on a page (2×2 grid).</summary>
+        /// <param name="pageX">The page's left screen coordinate.</param>
+        /// <param name="pageWidth">The page width.</param>
+        /// <param name="slot">The slot index (0–3: left-to-right, top-to-bottom).</param>
+        /// <param name="hasHeader">Whether this page shows a section title, which pushes the grid down.</param>
+        private Rectangle GetSlotBounds(int pageX, int pageWidth, int slot, bool hasHeader)
         {
-            const int topMargin = 40;
-            int cellHeight = (this.height - topMargin - 32) / CellsPerPage;
-            return new Rectangle(pageX + 32, this.yPositionOnScreen + topMargin + slot * cellHeight, pageWidth - 64, cellHeight);
+            int topMargin = 24 + (hasHeader ? HeaderHeight : 0);
+            int gridWidth = pageWidth - 64;
+            int gridHeight = this.height - topMargin - 32;
+            int cellWidth = gridWidth / 2;
+            int cellHeight = gridHeight / 2;
+            int col = slot % 2;
+            int row = slot / 2;
+            return new Rectangle(pageX + 32 + col * cellWidth, this.yPositionOnScreen + topMargin + row * cellHeight, cellWidth, cellHeight);
         }
 
-        /// <summary>Get the fish cell at the given screen position, if any.</summary>
+        /// <summary>Get the fish at the given screen position, if any.</summary>
         private FishEntry? GetFishAt(int x, int y)
         {
             int pageWidth = this.width / 2;
             foreach ((int pageX, int pageIndex) in new[] { (this.xPositionOnScreen, (this.Spread - 1) * 2), (this.xPositionOnScreen + pageWidth, (this.Spread - 1) * 2 + 1) })
             {
-                for (int slot = 0; slot < CellsPerPage; slot++)
+                if (pageIndex >= this.Pages.Count)
+                    continue;
+
+                Page page = this.Pages[pageIndex];
+                for (int slot = 0; slot < page.Fish.Count; slot++)
                 {
-                    int cellIndex = pageIndex * CellsPerPage + slot;
-                    if (cellIndex >= this.Cells.Count)
-                        break;
-                    if (this.Cells[cellIndex].Fish is FishEntry fish && this.GetCellBounds(pageX, pageWidth, slot).Contains(x, y))
-                        return fish;
+                    if (this.GetSlotBounds(pageX, pageWidth, slot, page.Header is not null).Contains(x, y))
+                        return page.Fish[slot];
                 }
             }
             return null;
         }
 
-        /// <summary>Draw one list page (up to <see cref="CellsPerPage"/> cells).</summary>
+        /// <summary>Draw one list page: optional section title at the top edge, then a 2×2 fish grid.</summary>
         private void DrawListPage(SpriteBatch b, int pageX, int pageWidth, int pageIndex)
         {
-            for (int slot = 0; slot < CellsPerPage; slot++)
-            {
-                int cellIndex = pageIndex * CellsPerPage + slot;
-                if (cellIndex >= this.Cells.Count)
-                    break;
+            if (pageIndex >= this.Pages.Count)
+                return;
 
-                Cell cell = this.Cells[cellIndex];
-                Rectangle bounds = this.GetCellBounds(pageX, pageWidth, slot);
+            Page page = this.Pages[pageIndex];
 
-                if (cell.Header is not null)
-                    this.DrawHeaderCell(b, cell.Header, bounds);
-                else if (cell.Fish is not null)
-                    this.DrawFishCell(b, cell.Fish, bounds);
-            }
+            if (page.Header is not null)
+                this.DrawPageHeader(b, page.Header, pageX, pageWidth);
+
+            for (int slot = 0; slot < page.Fish.Count; slot++)
+                this.DrawFishCell(b, page.Fish[slot], this.GetSlotBounds(pageX, pageWidth, slot, page.Header is not null));
         }
 
-        /// <summary>Draw a section header cell.</summary>
-        private void DrawHeaderCell(SpriteBatch b, string title, Rectangle bounds)
+        /// <summary>Draw a section title at the top edge of a page.</summary>
+        private void DrawPageHeader(SpriteBatch b, string title, int pageX, int pageWidth)
         {
             Vector2 size = Game1.dialogueFont.MeasureString(title);
-            Vector2 position = new(bounds.X + (bounds.Width - size.X) / 2, bounds.Y + (bounds.Height - size.Y) / 2);
+            Vector2 position = new(pageX + (pageWidth - size.X) / 2, this.yPositionOnScreen + 24);
             b.DrawString(Game1.dialogueFont, title, position, Game1.textColor);
 
             // divider line under the title
             int lineY = (int)(position.Y + size.Y + 4);
-            b.Draw(Game1.staminaRect, new Rectangle(bounds.X + 16, lineY, bounds.Width - 32, 2), Game1.textColor * 0.35f);
+            b.Draw(Game1.staminaRect, new Rectangle(pageX + 48, lineY, pageWidth - 96, 2), Game1.textColor * 0.35f);
         }
 
-        /// <summary>Draw a fish cell: sprite on top, name and brief info below.</summary>
+        /// <summary>Draw a fish cell: sprite on top, name and brief info below, centered in its grid slot.</summary>
         private void DrawFishCell(SpriteBatch b, FishEntry fish, Rectangle bounds)
         {
             bool caught = fish.IsCaught();
             int spriteSize = (int)(16 * SpriteScale);
 
-            // sprite (black silhouette if not caught yet)
-            Texture2D texture = fish.Data.GetTexture();
-            Rectangle sourceRect = fish.Data.GetSourceRect();
-            Vector2 spritePos = new(bounds.X + (bounds.Width - spriteSize) / 2f, bounds.Y);
-            b.Draw(texture, spritePos, sourceRect, caught ? Color.White : Color.Black, 0f, Vector2.Zero, SpriteScale, SpriteEffects.None, 1f);
-
-            // name (hidden until caught)
             string name = caught ? fish.Data.DisplayName : this.I18n.Get("menu.journal.unknown-fish");
-            Vector2 nameSize = Game1.smallFont.MeasureString(name);
-            b.DrawString(Game1.smallFont, name, new Vector2(bounds.X + (bounds.Width - nameSize.X) / 2, bounds.Y + spriteSize + 2), Game1.textColor);
-
-            // brief info
             string info = caught
                 ? this.I18n.Get("menu.journal.caught-count", new { count = fish.TimesCaught() })
                 : this.I18n.Get("menu.journal.not-caught-hint");
+            Vector2 nameSize = Game1.smallFont.MeasureString(name);
             Vector2 infoSize = Game1.smallFont.MeasureString(info);
-            b.DrawString(Game1.smallFont, info, new Vector2(bounds.X + (bounds.Width - infoSize.X) / 2, bounds.Y + spriteSize + 2 + nameSize.Y), Game1.textColor * 0.6f);
+
+            // center the content block vertically in the slot
+            int contentHeight = spriteSize + 2 + (int)nameSize.Y + (int)infoSize.Y;
+            int top = bounds.Y + Math.Max(0, (bounds.Height - contentHeight) / 2);
+
+            // sprite (black silhouette if not caught yet)
+            b.Draw(
+                fish.Data.GetTexture(),
+                new Vector2(bounds.X + (bounds.Width - spriteSize) / 2f, top),
+                fish.Data.GetSourceRect(),
+                caught ? Color.White : Color.Black,
+                0f, Vector2.Zero, SpriteScale, SpriteEffects.None, 1f);
+
+            // name (hidden until caught)
+            b.DrawString(Game1.smallFont, name, new Vector2(bounds.X + (bounds.Width - nameSize.X) / 2, top + spriteSize + 2), Game1.textColor);
+
+            // brief info
+            b.DrawString(Game1.smallFont, info, new Vector2(bounds.X + (bounds.Width - infoSize.X) / 2, top + spriteSize + 2 + nameSize.Y), Game1.textColor * 0.6f);
         }
 
 
