@@ -16,7 +16,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
     /// Layout: a two-page spread. Spread 0 is the title page; the following spreads list
     /// all fish grouped into sections by source mod. Every list page is a 2×2 grid (4 fish).
     /// Each section starts at the top of a fresh page with its title at the page's top edge;
-    /// on such pages the fish grid starts slightly lower to make room for the title.
+    /// the fish grid sits at the same position on every page (space for a title is always reserved).
     /// Uncaught fish are shown as black silhouettes with their name hidden.
     /// Clicking a fish opens its detail spread: stats on the left page, where/when info on the right.
     /// </remarks>
@@ -240,17 +240,16 @@ namespace FishingHorizonsExpanded.Framework.Journal
             );
         }
 
-        /// <summary>The height reserved at the top of a page for a section title.</summary>
+        /// <summary>The height reserved at the top of every page for a section title, so the grid is identical on all pages.</summary>
         private const int HeaderHeight = 56;
 
-        /// <summary>Get the bounds of a fish slot on a page (2×2 grid).</summary>
+        /// <summary>Get the bounds of a fish slot on a page (2×2 grid). The grid position is the same on every page, whether or not a section title is shown.</summary>
         /// <param name="pageX">The page's left screen coordinate.</param>
         /// <param name="pageWidth">The page width.</param>
         /// <param name="slot">The slot index (0–3: left-to-right, top-to-bottom).</param>
-        /// <param name="hasHeader">Whether this page shows a section title, which pushes the grid down.</param>
-        private Rectangle GetSlotBounds(int pageX, int pageWidth, int slot, bool hasHeader)
+        private Rectangle GetSlotBounds(int pageX, int pageWidth, int slot)
         {
-            int topMargin = 24 + (hasHeader ? HeaderHeight : 0);
+            int topMargin = 24 + HeaderHeight;
             int gridWidth = pageWidth - 64;
             int gridHeight = this.height - topMargin - 32;
             int cellWidth = gridWidth / 2;
@@ -272,7 +271,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 Page page = this.Pages[pageIndex];
                 for (int slot = 0; slot < page.Fish.Count; slot++)
                 {
-                    if (this.GetSlotBounds(pageX, pageWidth, slot, page.Header is not null).Contains(x, y))
+                    if (this.GetSlotBounds(pageX, pageWidth, slot).Contains(x, y))
                         return page.Fish[slot];
                 }
             }
@@ -291,7 +290,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 this.DrawPageHeader(b, page.Header, pageX, pageWidth);
 
             for (int slot = 0; slot < page.Fish.Count; slot++)
-                this.DrawFishCell(b, page.Fish[slot], this.GetSlotBounds(pageX, pageWidth, slot, page.Header is not null));
+                this.DrawFishCell(b, page.Fish[slot], this.GetSlotBounds(pageX, pageWidth, slot));
         }
 
         /// <summary>Draw a section title at the top edge of a page.</summary>
