@@ -1,0 +1,124 @@
+{
+  "version": 4,
+  "targets": {
+    "net6.0": {
+      "Pathoschild.Stardew.ModBuildConfig/4.3.2": {
+        "type": "package",
+        "build": {
+          "build/Pathoschild.Stardew.ModBuildConfig.targets": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Pathoschild.Stardew.ModBuildConfig/4.3.2": {
+      "sha512": "wRnRRTgB84YPyNIGFpI12Gdjfwery/JTgRbTboG0uJK5VJsuQ2VWT4fS4bcvPgOKMK8lqYyqxV7sEq7zgd60gQ==",
+      "type": "package",
+      "path": "pathoschild.stardew.modbuildconfig/4.3.2",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "analyzers/dotnet/cs/SMAPI.ModBuildConfig.Analyzer.dll",
+        "build/Newtonsoft.Json.dll",
+        "build/Pathoschild.Stardew.ModBuildConfig.targets",
+        "build/SMAPI.ModBuildConfig.dll",
+        "build/SMAPI.Toolkit.CoreInterfaces.dll",
+        "build/SMAPI.Toolkit.dll",
+        "build/find-game-folder.targets",
+        "images/icon.png",
+        "mod-package.md",
+        "pathoschild.stardew.modbuildconfig.4.3.2.nupkg.sha512",
+        "pathoschild.stardew.modbuildconfig.nuspec"
+      ]
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net6.0": [
+      "Pathoschild.Stardew.ModBuildConfig >= 4.3.2"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\WayMee\\.nuget\\packages\\": {}
+  },
+  "project": {
+    "version": "0.1.0",
+    "restore": {
+      "projectUniqueName": "C:\\Fishing-Horizons-Expanded\\FishingHorizonsExpanded.csproj",
+      "projectName": "FishingHorizonsExpanded",
+      "projectPath": "C:\\Fishing-Horizons-Expanded\\FishingHorizonsExpanded.csproj",
+      "packagesPath": "C:\\Users\\WayMee\\.nuget\\packages\\",
+      "outputPath": "C:\\Fishing-Horizons-Expanded\\obj\\",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "C:\\Users\\WayMee\\AppData\\Roaming\\NuGet\\NuGet.Config"
+      ],
+      "originalTargetFrameworks": [
+        "net6.0"
+      ],
+      "sources": {
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net6.0": {
+          "framework": "net6.0",
+          "targetAlias": "net6.0",
+          "projectReferences": {}
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "10.0.300"
+    },
+    "frameworks": {
+      "net6.0": {
+        "framework": "net6.0",
+        "targetAlias": "net6.0",
+        "dependencies": {
+          "Pathoschild.Stardew.ModBuildConfig": {
+            "target": "Package",
+            "version": "[4.3.2, )"
+          }
+        },
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Ref",
+            "version": "[6.0.36, 6.0.36]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Ref",
+            "version": "[6.0.36, 6.0.36]"
+          },
+          {
+            "name": "Microsoft.WindowsDesktop.App.Ref",
+            "version": "[6.0.36, 6.0.36]"
+          }
+        ],
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.301\\RuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}

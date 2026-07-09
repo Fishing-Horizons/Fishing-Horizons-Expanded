@@ -1,0 +1,9 @@
+C:\Fishing-Horizons-Expanded\bin\Debug\net6.0\FishingHorizonsExpanded.deps.json
+C:\Fishing-Horizons-Expanded\bin\Debug\net6.0\FishingHorizonsExpanded.dll
+C:\Fishing-Horizons-Expanded\obj\Debug\net6.0\FishingHorizonsExpanded.csproj.AssemblyReference.cache
+C:\Fishing-Horizons-Expanded\obj\Debug\net6.0\FishingHorizonsExpanded.GeneratedMSBuildEditorConfig.editorconfig
+C:\Fishing-Horizons-Expanded\obj\Debug\net6.0\FishingHorizonsExpanded.AssemblyInfoInputs.cache
+C:\Fishing-Horizons-Expanded\obj\Debug\net6.0\FishingHorizonsExpanded.AssemblyInfo.cs
+C:\Fishing-Horizons-Expanded\obj\Debug\net6.0\FishingHorizonsExpanded.csproj.CoreCompileInputs.cache
+C:\Fishing-Horizons-Expanded\obj\Debug\net6.0\FishingHorizonsExpanded.sourcelink.json
+C:\Fishing-Horizons-Expanded\obj\Debug\net6.0\FishingHorizonsExpanded.dll
