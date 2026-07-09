@@ -30,6 +30,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
         public bool IsTrapFish { get; }
 
         /// <summary>The maximum possible size in inches (vanilla unit), or 0 if unknown.</summary>
+        public int MinPossibleSize { get; set; }
+
+        /// <summary>The maximum possible size in inches (vanilla unit), or 0 if unknown.</summary>
         public int MaxPossibleSize { get; set; }
 
         /// <summary>The catch time ranges as (start, end) in game time (like 600–2600), for rod fish.</summary>
@@ -184,22 +187,26 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /*********
         ** Private methods
         *********/
-        /// <summary>Parse size/time/season/weather info from the raw <c>Data/Fish</c> fields.</summary>
+        /// 
         private static void ParseFishFields(FishEntry entry, string[] fields)
         {
             try
             {
                 if (entry.IsTrapFish)
                 {
-                    // Name/trap/Chance/WaterType/MinSize/MaxSize/...
-                    if (fields.Length > 3)
-                        entry.TrapWaterType = fields[3];
-                    if (fields.Length > 5 && int.TryParse(fields[5], out int trapMax))
+                    // Name/trap/Chance/ExtraItems/Location/MinSize/MaxSize
+                    if (fields.Length > 4)
+                        entry.TrapWaterType = fields[4];
+                    if (fields.Length > 5 && int.TryParse(fields[5], out int trapMin))
+                        entry.MinPossibleSize = trapMin;
+                    if (fields.Length > 6 && int.TryParse(fields[6], out int trapMax))
                         entry.MaxPossibleSize = trapMax;
                     return;
                 }
 
                 // Name/Difficulty/Behavior/MinSize/MaxSize/Time/Seasons/Weather/...
+                if (fields.Length > 3 && int.TryParse(fields[3], out int rodMin))
+                    entry.MinPossibleSize = rodMin;
                 if (fields.Length > 4 && int.TryParse(fields[4], out int rodMax))
                     entry.MaxPossibleSize = rodMax;
 
@@ -227,6 +234,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 // malformed custom fish data — leave defaults, the journal still shows the fish
             }
         }
+
 
         /// <summary>Scan <c>Data/Locations</c> to find where each fish can be caught.</summary>
         private static void PopulateLocations(Dictionary<string, FishEntry> byQualifiedId)

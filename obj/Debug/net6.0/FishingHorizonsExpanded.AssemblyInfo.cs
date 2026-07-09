@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("FishingHorizonsExpanded")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+ce1ad124c2e1a008571b5222f01c7e4b760e5e0c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+e7bc33af0e44df70d334921bdced114b6634a13e")]
 [assembly: System.Reflection.AssemblyProductAttribute("FishingHorizonsExpanded")]
 [assembly: System.Reflection.AssemblyTitleAttribute("FishingHorizonsExpanded")]
 [assembly: System.Reflection.AssemblyVersionAttribute("0.1.0.0")]

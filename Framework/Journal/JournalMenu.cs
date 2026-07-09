@@ -388,6 +388,12 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 lines.Add((progress.Gifted, this.I18n.Get("menu.journal.detail.gifted")));
                 lines.Add((null, this.I18n.Get("menu.journal.detail.best-quality", new { quality = this.GetQualityName(progress.BestQuality) })));
             }
+            if (fish.MinPossibleSize > 0 && fish.MaxPossibleSize > 0)
+            {
+            int minCm = (int)Math.Round(fish.MinPossibleSize * 2.54);
+            int maxCm = (int)Math.Round(fish.MaxPossibleSize * 2.54);
+            lines.Add((null, this.I18n.Get("menu.journal.detail.size-range", new { min = minCm, max = maxCm })));
+            }
 
             foreach ((bool? check, string text) in lines)
             {

@@ -38,5 +38,6 @@
     "menu.journal.detail.time-line": "Время: {{time}}",
     "menu.journal.detail.time.all-day": "весь день",
     "menu.journal.detail.weather.sunny": "Погода: солнечно",
-    "menu.journal.detail.weather.rainy": "Погода: дождь"
+    "menu.journal.detail.weather.rainy": "Погода: дождь",
+    "menu.journal.detail.size-range": "Длина: {{min}}-{{max}} см"
 }
