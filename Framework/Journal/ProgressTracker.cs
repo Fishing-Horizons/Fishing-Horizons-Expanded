@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
+using StardewValley;
 
 namespace FishingHorizonsExpanded.Framework.Journal
 {
@@ -16,6 +18,28 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
         /// <summary>The best quality caught: -1 unknown, 0 normal, 1 silver, 2 gold, 4 iridium.</summary>
         public int BestQuality { get; set; } = -1;
+
+        /// <summary>The in-game day (<see cref="WorldDate.TotalDays"/>) when the last size record was set, or -1.</summary>
+        public int RecordDay { get; set; } = -1;
+    }
+
+    /// <summary>One line in the catch diary.</summary>
+    internal sealed class CatchLogEntry
+    {
+        /// <summary>The qualified item ID (like <c>(O)128</c>).</summary>
+        public string QualifiedId { get; set; } = "";
+
+        /// <summary>The in-game year of the catch.</summary>
+        public int Year { get; set; }
+
+        /// <summary>The in-game season of the catch (like "spring").</summary>
+        public string Season { get; set; } = "";
+
+        /// <summary>The in-game day of month of the catch.</summary>
+        public int Day { get; set; }
+
+        /// <summary>The caught size in inches (vanilla unit).</summary>
+        public int SizeInches { get; set; }
     }
 
     /// <summary>The per-save journal progress data.</summary>
@@ -23,16 +47,26 @@ namespace FishingHorizonsExpanded.Framework.Journal
     {
         /// <summary>Progress per fish, keyed by qualified item ID.</summary>
         public Dictionary<string, FishProgress> Fish { get; set; } = new();
+
+        /// <summary>The catch diary, oldest first (capped at <see cref="ProgressTracker.MaxLogEntries"/>).</summary>
+        public List<CatchLogEntry> Log { get; set; } = new();
     }
 
-    /// <summary>Loads and saves journal progress that the game doesn't track (sold/gifted/best quality).</summary>
+    /// <summary>Loads and saves journal progress that the game doesn't track (sold/gifted/best quality/catch diary).</summary>
     /// <remarks>
-    /// Milestone 3 adds the storage and UI; milestone 4 adds the Harmony patches that actually
-    /// record sales, gifts and catch quality. Data is stored in the save via SMAPI's save data API,
-    /// so it currently tracks the main player only (farmhand support can be added later).
+    /// The Harmony patches in <see cref="TrackingPatches"/> call the write methods here.
+    /// Data is stored in the save via SMAPI's save data API, so it currently tracks
+    /// the main player only (farmhand support can be added later).
     /// </remarks>
     internal sealed class ProgressTracker
     {
+        /*********
+        ** Constants
+        *********/
+        /// <summary>The maximum number of catch diary entries kept in the save.</summary>
+        public const int MaxLogEntries = 100;
+
+
         /*********
         ** Fields
         *********/
@@ -44,6 +78,13 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
         /// <summary>The loaded progress data for the current save.</summary>
         private ProgressData Data = new();
+
+
+        /*********
+        ** Accessors
+        *********/
+        /// <summary>The catch diary entries, oldest first.</summary>
+        public IReadOnlyList<CatchLogEntry> Log => this.Data.Log;
 
 
         /*********
@@ -66,13 +107,59 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 : new FishProgress();
         }
 
-        /// <summary>Get the tracked progress for a fish, creating it if needed (for milestone 4 writers).</summary>
+        /// <summary>Get the tracked progress for a fish, creating it if needed.</summary>
         /// <param name="qualifiedId">The qualified item ID (like <c>(O)128</c>).</param>
         public FishProgress GetOrCreate(string qualifiedId)
         {
             if (!this.Data.Fish.TryGetValue(qualifiedId, out FishProgress? progress))
                 this.Data.Fish[qualifiedId] = progress = new FishProgress();
             return progress;
+        }
+
+        /// <summary>Record a catch in the diary.</summary>
+        /// <param name="qualifiedId">The qualified item ID (like <c>(O)128</c>).</param>
+        /// <param name="sizeInches">The caught size in inches (vanilla unit).</param>
+        /// <param name="isSizeRecord">Whether this catch set a new size record.</param>
+        public void AddCatch(string qualifiedId, int sizeInches, bool isSizeRecord)
+        {
+            WorldDate date = Game1.Date;
+            this.Data.Log.Add(new CatchLogEntry
+            {
+                QualifiedId = qualifiedId,
+                Year = date.Year,
+                Season = date.SeasonKey,
+                Day = date.DayOfMonth,
+                SizeInches = sizeInches
+            });
+            while (this.Data.Log.Count > MaxLogEntries)
+                this.Data.Log.RemoveAt(0);
+
+            if (isSizeRecord)
+                this.GetOrCreate(qualifiedId).RecordDay = date.TotalDays;
+        }
+
+        /// <summary>Record the quality of a catch, keeping the best one.</summary>
+        /// <param name="qualifiedId">The qualified item ID (like <c>(O)128</c>).</param>
+        /// <param name="quality">The catch quality: 0 normal, 1 silver, 2 gold, 4 iridium.</param>
+        public void RecordQuality(string qualifiedId, int quality)
+        {
+            FishProgress progress = this.GetOrCreate(qualifiedId);
+            if (quality > progress.BestQuality)
+                progress.BestQuality = quality;
+        }
+
+        /// <summary>Mark a fish as sold at least once.</summary>
+        /// <param name="qualifiedId">The qualified item ID (like <c>(O)128</c>).</param>
+        public void MarkSold(string qualifiedId)
+        {
+            this.GetOrCreate(qualifiedId).Sold = true;
+        }
+
+        /// <summary>Mark a fish as gifted at least once.</summary>
+        /// <param name="qualifiedId">The qualified item ID (like <c>(O)128</c>).</param>
+        public void MarkGifted(string qualifiedId)
+        {
+            this.GetOrCreate(qualifiedId).Gifted = true;
         }
 
 

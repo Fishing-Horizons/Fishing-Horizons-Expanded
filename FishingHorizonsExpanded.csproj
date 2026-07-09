@@ -2,10 +2,11 @@
   <PropertyGroup>
     <AssemblyName>FishingHorizonsExpanded</AssemblyName>
     <RootNamespace>FishingHorizonsExpanded</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>1.2.0</Version>
     <TargetFramework>net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+    <EnableHarmony>true</EnableHarmony>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.3.2" />
