@@ -43,6 +43,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>The mod instance.</summary>
         private readonly ModEntry Mod;
 
+        /// <summary>The tracked journal progress (sold/gifted/best quality).</summary>
+        private ProgressTracker? Progress;
+
 
         /*********
         ** Accessors
@@ -65,6 +68,8 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <inheritdoc/>
         public void Activate(IModHelper helper)
         {
+            this.Progress = new ProgressTracker(helper);
+
             helper.Events.Content.AssetRequested += this.OnAssetRequested;
             helper.Events.Content.LocaleChanged += this.OnLocaleChanged;
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
@@ -199,7 +204,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
         private void OpenJournal()
         {
             Game1.playSound("bigSelect");
-            Game1.activeClickableMenu = new JournalMenu(this.Mod.Helper.Translation, this.Mod.Helper.ModRegistry);
+            Game1.activeClickableMenu = new JournalMenu(this.Mod.Helper.Translation, this.Mod.Helper.ModRegistry, this.Progress ??= new ProgressTracker(this.Mod.Helper));
         }
     }
 }
