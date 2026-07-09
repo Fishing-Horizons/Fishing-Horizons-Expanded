@@ -1,0 +1,15 @@
+{
+    "item.journal.name": "Дневник рыбака",
+    "item.journal.description": "Крепкий дневник для учёта всей рыбы в долине. Возьмите в руки и нажмите ПКМ, чтобы научиться им пользоваться.",
+
+    "message.journal-unlocked": "Дневник изучен! Нажмите {{key}}, чтобы открыть Дневник рыбака.",
+
+    "menu.journal.title": "Дневник рыбака",
+    "menu.journal.coming-soon": "Страницы пока пусты...",
+
+    "config.section.journal": "Дневник рыбака",
+    "config.enable-journal.name": "Включить дневник",
+    "config.enable-journal.tooltip": "Включает механику «Дневник рыбака».",
+    "config.journal-key.name": "Клавиша дневника",
+    "config.journal-key.tooltip": "Клавиша, открывающая дневник (после разблокировки)."
+}

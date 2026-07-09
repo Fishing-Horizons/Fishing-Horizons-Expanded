@@ -1,0 +1,10 @@
+{
+  "Name": "Fishing Horizons: Expanded",
+  "Author": "WayMee, Haku",
+  "Version": "0.1.0",
+  "Description": "New fishing mechanics for Stardew Valley: the Fisherman's Journal and more.",
+  "UniqueID": "waymeeNhaku.FishingHorizonsExpanded",
+  "EntryDll": "FishingHorizonsExpanded.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": []
+}
