@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
+using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewValley;
+using StardewValley.GameData.Locations;
 using StardewValley.ItemTypeDefinitions;
+using StardewValley.TokenizableStrings;
 
 namespace FishingHorizonsExpanded.Framework.Journal
 {
@@ -24,6 +28,24 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
         /// <summary>Whether this fish is caught with a crab pot instead of a fishing rod.</summary>
         public bool IsTrapFish { get; }
+
+        /// <summary>The maximum possible size in inches (vanilla unit), or 0 if unknown.</summary>
+        public int MaxPossibleSize { get; set; }
+
+        /// <summary>The catch time ranges as (start, end) in game time (like 600–2600), for rod fish.</summary>
+        public List<Point> TimeRanges { get; } = new();
+
+        /// <summary>The seasons from <c>Data/Fish</c> (like "spring", "fall"), for rod fish.</summary>
+        public HashSet<string> Seasons { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>The required weather for rod fish: "sunny", "rainy", or "both".</summary>
+        public string Weather { get; set; } = "both";
+
+        /// <summary>The water type for trap fish: "ocean" or "freshwater".</summary>
+        public string? TrapWaterType { get; set; }
+
+        /// <summary>The locations where this fish can be caught (display name → seasons; empty set = any season).</summary>
+        public Dictionary<string, HashSet<string>> Locations { get; } = new();
 
 
         /*********
@@ -52,11 +74,17 @@ namespace FishingHorizonsExpanded.Framework.Journal
         }
 
         /// <summary>The biggest caught size in inches (vanilla unit), or 0 if never caught.</summary>
-        public int MaxSize()
+        public int MaxCaughtSize()
         {
             return Game1.player.fishCaught.TryGetValue(this.QualifiedId, out int[]? stats) && stats.Length > 1
                 ? stats[1]
                 : 0;
+        }
+
+        /// <summary>Whether the player caught a big specimen (≥90% of the maximum possible size).</summary>
+        public bool HasBigSpecimen()
+        {
+            return this.MaxPossibleSize > 0 && this.MaxCaughtSize() >= 0.9 * this.MaxPossibleSize;
         }
     }
 
@@ -93,6 +121,13 @@ namespace FishingHorizonsExpanded.Framework.Journal
     internal static class FishRegistry
     {
         /*********
+        ** Fields
+        *********/
+        /// <summary>Matches season names inside a game state query condition.</summary>
+        private static readonly Regex SeasonRegex = new("\\b(spring|summer|fall|winter)\\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+
+        /*********
         ** Public methods
         *********/
         /// <summary>Build the journal sections: vanilla fish first, then one section per mod.</summary>
@@ -102,6 +137,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
         {
             var fishData = Game1.content.Load<Dictionary<string, string>>("Data\\Fish");
             var bySource = new Dictionary<string, List<FishEntry>>(); // key: "" for vanilla, else mod ID or raw prefix
+            var byQualifiedId = new Dictionary<string, FishEntry>();
 
             foreach ((string id, string rawData) in fishData)
             {
@@ -112,11 +148,17 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 string[] fields = rawData.Split('/');
                 bool isTrapFish = fields.Length > 1 && fields[1] == "trap";
 
+                var entry = new FishEntry(id, data, isTrapFish);
+                ParseFishFields(entry, fields);
+
                 string sourceKey = GetSourceKey(id, data);
                 if (!bySource.TryGetValue(sourceKey, out List<FishEntry>? list))
                     bySource[sourceKey] = list = new List<FishEntry>();
-                list.Add(new FishEntry(id, data, isTrapFish));
+                list.Add(entry);
+                byQualifiedId[entry.QualifiedId] = entry;
             }
+
+            PopulateLocations(byQualifiedId);
 
             var sections = new List<JournalSection>();
 
@@ -142,6 +184,125 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /*********
         ** Private methods
         *********/
+        /// <summary>Parse size/time/season/weather info from the raw <c>Data/Fish</c> fields.</summary>
+        private static void ParseFishFields(FishEntry entry, string[] fields)
+        {
+            try
+            {
+                if (entry.IsTrapFish)
+                {
+                    // Name/trap/Chance/WaterType/MinSize/MaxSize/...
+                    if (fields.Length > 3)
+                        entry.TrapWaterType = fields[3];
+                    if (fields.Length > 5 && int.TryParse(fields[5], out int trapMax))
+                        entry.MaxPossibleSize = trapMax;
+                    return;
+                }
+
+                // Name/Difficulty/Behavior/MinSize/MaxSize/Time/Seasons/Weather/...
+                if (fields.Length > 4 && int.TryParse(fields[4], out int rodMax))
+                    entry.MaxPossibleSize = rodMax;
+
+                if (fields.Length > 5)
+                {
+                    string[] times = fields[5].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    for (int i = 0; i + 1 < times.Length; i += 2)
+                    {
+                        if (int.TryParse(times[i], out int start) && int.TryParse(times[i + 1], out int end))
+                            entry.TimeRanges.Add(new Point(start, end));
+                    }
+                }
+
+                if (fields.Length > 6)
+                {
+                    foreach (Match match in SeasonRegex.Matches(fields[6]))
+                        entry.Seasons.Add(match.Value.ToLowerInvariant());
+                }
+
+                if (fields.Length > 7 && fields[7] is "sunny" or "rainy")
+                    entry.Weather = fields[7];
+            }
+            catch
+            {
+                // malformed custom fish data — leave defaults, the journal still shows the fish
+            }
+        }
+
+        /// <summary>Scan <c>Data/Locations</c> to find where each fish can be caught.</summary>
+        private static void PopulateLocations(Dictionary<string, FishEntry> byQualifiedId)
+        {
+            Dictionary<string, LocationData> locations;
+            try
+            {
+                locations = Game1.content.Load<Dictionary<string, LocationData>>("Data\\Locations");
+            }
+            catch
+            {
+                return; // journal still works without location info
+            }
+
+            foreach ((string locationName, LocationData locationData) in locations)
+            {
+                if (locationName is "Default" || locationData.Fish is null)
+                    continue;
+
+                string? displayName = null;
+
+                foreach (SpawnFishData spawn in locationData.Fish)
+                {
+                    string? itemId = spawn.ItemId;
+                    if (itemId is null)
+                        continue;
+                    if (!byQualifiedId.TryGetValue(itemId, out FishEntry? entry))
+                    {
+                        // the ID may be unqualified in custom data
+                        string? qualified = ItemRegistry.QualifyItemId(itemId);
+                        if (qualified is null || !byQualifiedId.TryGetValue(qualified, out entry))
+                            continue;
+                    }
+
+                    displayName ??= GetLocationDisplayName(locationName, locationData);
+
+                    if (!entry.Locations.TryGetValue(displayName, out HashSet<string>? seasons))
+                        entry.Locations[displayName] = seasons = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    // season restriction: explicit field, or heuristically from the condition query
+                    if (spawn.Season.HasValue)
+                        seasons.Add(spawn.Season.Value.ToString().ToLowerInvariant());
+                    else if (!string.IsNullOrWhiteSpace(spawn.Condition))
+                    {
+                        foreach (Match match in SeasonRegex.Matches(spawn.Condition))
+                            seasons.Add(match.Value.ToLowerInvariant());
+                    }
+                    else
+                        seasons.Add("*"); // any season — overrides specific ones
+                }
+            }
+        }
+
+        /// <summary>Get a location's translated display name.</summary>
+        private static string GetLocationDisplayName(string locationName, LocationData data)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(data.DisplayName))
+                {
+                    string parsed = TokenParser.ParseText(data.DisplayName);
+                    if (!string.IsNullOrWhiteSpace(parsed))
+                        return parsed;
+                }
+
+                string? fromInstance = Game1.getLocationFromName(locationName)?.DisplayName;
+                if (!string.IsNullOrWhiteSpace(fromInstance))
+                    return fromInstance;
+            }
+            catch
+            {
+                // fall through to raw name
+            }
+            return locationName;
+        }
+
         /// <summary>Get the source key for a fish: empty string for vanilla, else the source mod ID (or raw prefix).</summary>
         private static string GetSourceKey(string id, ParsedItemData data)
         {
