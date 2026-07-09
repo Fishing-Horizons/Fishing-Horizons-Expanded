@@ -38,5 +38,6 @@
     "menu.journal.detail.time-line": "Time: {{time}}",
     "menu.journal.detail.time.all-day": "all day",
     "menu.journal.detail.weather.sunny": "Weather: sunny",
-    "menu.journal.detail.weather.rainy": "Weather: rainy"
+    "menu.journal.detail.weather.rainy": "Weather: rainy",
+    "menu.journal.detail.size-range": "Size range: {{min}}-{{max}} cm"
 }
