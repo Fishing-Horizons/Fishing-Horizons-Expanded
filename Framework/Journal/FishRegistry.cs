@@ -146,6 +146,12 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>Matches season names inside a game state query condition.</summary>
         private static readonly Regex SeasonRegex = new("\\b(spring|summer|fall|winter)\\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>Vanilla <c>Data/Fish</c> entries that aren't caught with the fishing minigame (algae/seaweed and trash), excluded from the journal.</summary>
+        private static readonly HashSet<string> NonMinigameIds = new() { "152", "153", "157", "167", "168", "169", "170", "171", "172", "173" };
+
+        /// <summary>Internal/technical location keys in <c>Data/Locations</c> that must never show up as catch locations.</summary>
+        private static readonly HashSet<string> HiddenLocations = new(StringComparer.OrdinalIgnoreCase) { "Default", "fishingGame", "Temp" };
+
 
         /*********
         ** Public methods
@@ -163,6 +169,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
             {
                 ParsedItemData data = ItemRegistry.GetData(ItemRegistry.type_object + id);
                 if (data is null || data.IsErrorItem)
+                    continue;
+
+                // skip items that aren't caught with the fishing minigame (algae, seaweed, trash)
+                if (NonMinigameIds.Contains(id) || data.Category == StardewValley.Object.junkCategory)
                     continue;
 
                 string[] fields = rawData.Split('/');
@@ -268,10 +278,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
             foreach ((string locationName, LocationData locationData) in locations)
             {
-                if (locationName is "Default" || locationData.Fish is null)
+                if (HiddenLocations.Contains(locationName) || locationData.Fish is null)
                     continue;
 
-                string? displayName = null;
+                string? baseDisplayName = null;
 
                 foreach (SpawnFishData spawn in locationData.Fish)
                 {
@@ -286,7 +296,13 @@ namespace FishingHorizonsExpanded.Framework.Journal
                             continue;
                     }
 
-                    displayName ??= GetLocationDisplayName(locationName, locationData);
+                    baseDisplayName ??= GetLocationDisplayName(locationName, locationData);
+
+                    // append the fish area name if the spawn is limited to a named sub-area (like the forest pond vs the river)
+                    string displayName = baseDisplayName;
+                    string? areaName = GetFishAreaDisplayName(locationData, spawn.FishAreaId);
+                    if (areaName is not null)
+                        displayName = $"{baseDisplayName} ({areaName})";
 
                     entry.LocationInternalNames[displayName] = locationName;
                     if (!entry.Locations.TryGetValue(displayName, out HashSet<string>? seasons))
@@ -304,6 +320,28 @@ namespace FishingHorizonsExpanded.Framework.Journal
                         seasons.Add("*"); // any season — overrides specific ones
                 }
             }
+        }
+
+        /// <summary>Get the translated display name of a fish area within a location, or null if the area is unknown or unnamed.</summary>
+        private static string? GetFishAreaDisplayName(LocationData data, string? fishAreaId)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(fishAreaId)
+                    && data.FishAreas is not null
+                    && data.FishAreas.TryGetValue(fishAreaId, out FishAreaData? area)
+                    && !string.IsNullOrWhiteSpace(area?.DisplayName))
+                {
+                    string parsed = TokenParser.ParseText(area.DisplayName);
+                    if (!string.IsNullOrWhiteSpace(parsed))
+                        return parsed;
+                }
+            }
+            catch
+            {
+                // treat malformed area data as unnamed
+            }
+            return null;
         }
 
         /// <summary>Get a location's translated display name.</summary>
