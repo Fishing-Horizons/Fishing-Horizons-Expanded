@@ -845,11 +845,11 @@ namespace FishingHorizonsExpanded.Framework.Journal
                         var layer = location.Map?.Layers[0];
                         Point tile = layer is not null ? new Point(layer.LayerWidth / 2, layer.LayerHeight / 2) : Point.Zero;
 
-                        MapAreaPosition? position = WorldMapManager.GetPositionData(location, tile);
-                        if (position is null || position.Region.Id != this.MapRegion.Id)
+                        MapAreaPositionWithContext? position = WorldMapManager.GetPositionData(location, tile);
+                        if (position is null || position.Value.Data.Region.Id != this.MapRegion.Id)
                             continue;
 
-                        Vector2 pixel = position.GetMapPixelPosition(location, tile);
+                        Vector2 pixel = position.Value.GetMapPixelPosition();
                         var marker = new Vector2(
                             Math.Clamp((pixel.X - area.X) / Math.Max(1, area.Width), 0.02f, 0.98f),
                             Math.Clamp((pixel.Y - area.Y) / Math.Max(1, area.Height), 0.02f, 0.98f));
