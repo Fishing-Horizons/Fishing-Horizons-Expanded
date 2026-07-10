@@ -50,6 +50,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>The locations where this fish can be caught (display name → seasons; empty set = any season).</summary>
         public Dictionary<string, HashSet<string>> Locations { get; } = new();
 
+        /// <summary>The internal location names by display name (for world map markers).</summary>
+        public Dictionary<string, string> LocationInternalNames { get; } = new();
+
 
         /*********
         ** Public methods
@@ -66,6 +69,20 @@ namespace FishingHorizonsExpanded.Framework.Journal
         public bool IsCaught()
         {
             return Game1.player.fishCaught.ContainsKey(this.QualifiedId);
+        }
+
+        /// <summary>Whether a specific player has ever caught this fish.</summary>
+        public bool IsCaughtBy(Farmer farmer)
+        {
+            return farmer.fishCaught.ContainsKey(this.QualifiedId);
+        }
+
+        /// <summary>The biggest size (in inches) a specific player caught, or 0 if they never caught it.</summary>
+        public int MaxCaughtSizeFor(Farmer farmer)
+        {
+            return farmer.fishCaught.TryGetValue(this.QualifiedId, out int[]? stats) && stats.Length > 1
+                ? stats[1]
+                : 0;
         }
 
         /// <summary>How many of this fish the current player has caught.</summary>
@@ -271,6 +288,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
                     displayName ??= GetLocationDisplayName(locationName, locationData);
 
+                    entry.LocationInternalNames[displayName] = locationName;
                     if (!entry.Locations.TryGetValue(displayName, out HashSet<string>? seasons))
                         entry.Locations[displayName] = seasons = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
