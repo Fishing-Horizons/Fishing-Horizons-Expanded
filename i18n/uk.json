@@ -92,5 +92,16 @@
     "menu.journal.note.fact.160": "Морський чорт причаївся на північ від міста. Підчепити його може лише справжній майстер.",
     "menu.journal.note.fact.163": "Легенда. Раз на покоління знаходиться рибалка, що її витягне. Може, це будеш ти.",
     "menu.journal.note.fact.682": "Короп-мутант... щось у тій стічній воді змінило його назавжди.",
-    "menu.journal.note.fact.775": "Льодовикова риба ховається біля крижаного мису острова Наконечник. Одягайся тепліше."
+    "menu.journal.note.fact.775": "Льодовикова риба ховається біля крижаного мису острова Наконечник. Одягайся тепліше.",
+    "menu.journal.pond.title": "Рибний став",
+    "menu.journal.pond.max-population": "Макс. населення: {{count}}",
+    "menu.journal.pond.spawn-daily": "Розмноження: нова риба щодня",
+    "menu.journal.pond.spawn-days": "Розмноження: нова риба раз на {{days}} дн.",
+    "menu.journal.pond.gates-label": "Запити для росту ставу:",
+    "menu.journal.pond.gate-line": "{{population}} риб: {{items}}",
+    "menu.journal.pond.no-gates": "Став росте сам, без запитів.",
+    "menu.journal.pond.produce-title": "Продукція ставу",
+    "menu.journal.pond.produce-population": "Від {{count}} риб:",
+    "menu.journal.pond.produce-empty": "Цей став нічого не виробляє.",
+    "menu.journal.pond.produce-note": "Став перевіряється щоранку — що більше в ньому риб, то вищий шанс щось знайти."
 }

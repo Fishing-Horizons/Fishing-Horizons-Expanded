@@ -92,5 +92,16 @@
     "menu.journal.note.fact.160": "The Angler lurks north of town. Only a true master gets that one on a hook.",
     "menu.journal.note.fact.163": "The Legend. One fisherman in a generation lands it. Maybe it'll be you.",
     "menu.journal.note.fact.682": "The Mutant Carp... something in that sewer water changed it forever.",
-    "menu.journal.note.fact.775": "The Glacierfish hides at the icy tip of Arrowhead Island. Dress warm."
+    "menu.journal.note.fact.775": "The Glacierfish hides at the icy tip of Arrowhead Island. Dress warm.",
+    "menu.journal.pond.title": "Fish Pond",
+    "menu.journal.pond.max-population": "Max population: {{count}}",
+    "menu.journal.pond.spawn-daily": "Breeding: a new fish every day",
+    "menu.journal.pond.spawn-days": "Breeding: a new fish every {{days}} days",
+    "menu.journal.pond.gates-label": "Requests to grow the pond:",
+    "menu.journal.pond.gate-line": "{{population}} fish: {{items}}",
+    "menu.journal.pond.no-gates": "The pond grows on its own, no requests needed.",
+    "menu.journal.pond.produce-title": "Pond Produce",
+    "menu.journal.pond.produce-population": "From {{count}} fish:",
+    "menu.journal.pond.produce-empty": "This pond doesn't produce anything.",
+    "menu.journal.pond.produce-note": "The pond is checked every morning — the more fish in it, the better the chance of finding something."
 }

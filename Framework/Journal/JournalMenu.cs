@@ -20,6 +20,8 @@ namespace FishingHorizonsExpanded.Framework.Journal
     /// of a section's first page. Uncaught fish are shown as black silhouettes with hidden names.
     /// Clicking a fish opens its detail spread: stats, sizes and Willy's note on the left page;
     /// the world map with catch markers, locations and season/time/weather on the right page.
+    /// For caught fish that can live in a fish pond, the next arrow flips to a pond spread:
+    /// population, breeding and growth requests on the left page, producible items on the right.
     /// The last spread is the catch diary (recent catches across both pages).
     /// </remarks>
     internal sealed class JournalMenu : IClickableMenu
@@ -78,6 +80,12 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
         /// <summary>The fish whose detail spread is open, if any.</summary>
         private FishEntry? DetailFish;
+
+        /// <summary>Whether the pond page of the detail spread is shown (instead of the main detail pages).</summary>
+        private bool ShowPondPage;
+
+        /// <summary>Cached pond info per qualified item ID (null = this fish can't live in a pond).</summary>
+        private readonly Dictionary<string, PondInfo?> PondCache = new();
 
         /// <summary>The fish currently under the cursor on a list page, if any (for the hover zoom effect).</summary>
         private FishEntry? HoveredFish;
@@ -186,12 +194,20 @@ namespace FishingHorizonsExpanded.Framework.Journal
             }
             base.receiveLeftClick(x, y, playSound);
 
-            // detail spread: only the back button returns to the list (other clicks do nothing)
+            // detail spread: the back button returns to the previous page, the next arrow opens the pond page
             if (this.DetailFish is not null)
             {
                 if (this.BackButton.containsPoint(x, y))
                 {
-                    this.DetailFish = null;
+                    if (this.ShowPondPage)
+                        this.ShowPondPage = false;
+                    else
+                        this.DetailFish = null;
+                    Game1.playSound("shwip");
+                }
+                else if (!this.ShowPondPage && this.NextArrow.containsPoint(x, y) && this.HasPondPage(this.DetailFish))
+                {
+                    this.ShowPondPage = true;
                     Game1.playSound("shwip");
                 }
                 return;
@@ -218,6 +234,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 if (clicked is not null)
                 {
                     this.DetailFish = clicked;
+                    this.ShowPondPage = false;
                     Game1.playSound("shwip");
                 }
             }
@@ -226,10 +243,13 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <inheritdoc/>
         public override void receiveRightClick(int x, int y, bool playSound = true)
         {
-            // right click on the detail spread goes back to the list
+            // right click on the pond page goes back to the detail spread, on the detail spread back to the list
             if (this.DetailFish is not null)
             {
-                this.DetailFish = null;
+                if (this.ShowPondPage)
+                    this.ShowPondPage = false;
+                else
+                    this.DetailFish = null;
                 Game1.playSound("shwip");
             }
         }
@@ -237,10 +257,13 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <inheritdoc/>
         public override void receiveKeyPress(Microsoft.Xna.Framework.Input.Keys key)
         {
-            // Escape/menu key from the detail spread goes back to the list instead of closing
+            // Escape/menu key steps back: pond page → detail spread → list (instead of closing)
             if (this.DetailFish is not null && (key == Microsoft.Xna.Framework.Input.Keys.Escape || Game1.options.doesInputListContain(Game1.options.menuButton, key)))
             {
-                this.DetailFish = null;
+                if (this.ShowPondPage)
+                    this.ShowPondPage = false;
+                else
+                    this.DetailFish = null;
                 Game1.playSound("shwip");
                 return;
             }
@@ -274,7 +297,16 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
             if (this.DetailFish is not null)
             {
-                this.DrawDetailSpread(b, this.DetailFish, pageWidth);
+                if (this.ShowPondPage)
+                {
+                    this.DrawPondSpread(b, this.DetailFish, pageWidth);
+                }
+                else
+                {
+                    this.DrawDetailSpread(b, this.DetailFish, pageWidth);
+                    if (this.HasPondPage(this.DetailFish))
+                        this.NextArrow.draw(b);
+                }
                 this.BackButton.draw(b);
             }
             else if (this.Spread == 0)
@@ -858,6 +890,170 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
             // fallback: seasons from Data/Fish
             return fish.Seasons.Count > 0 ? new HashSet<string>(fish.Seasons, StringComparer.OrdinalIgnoreCase) : all;
+        }
+
+
+        /*********
+        ** Private methods — pond spread
+        *********/
+        /// <summary>Whether the fish has a pond page (caught + can live in a fish pond).</summary>
+        private bool HasPondPage(FishEntry fish)
+        {
+            return fish.IsCaught() && this.GetPondInfo(fish) is not null;
+        }
+
+        /// <summary>Get the pond info for a fish (cached), or null if it can't live in a fish pond.</summary>
+        private PondInfo? GetPondInfo(FishEntry fish)
+        {
+            if (!this.PondCache.TryGetValue(fish.QualifiedId, out PondInfo? info))
+                this.PondCache[fish.QualifiedId] = info = PondRegistry.Get(fish);
+            return info;
+        }
+
+        /// <summary>Draw the pond spread: population, breeding and growth requests on the left page; producible items on the right page.</summary>
+        private void DrawPondSpread(SpriteBatch b, FishEntry fish, int pageWidth)
+        {
+            PondInfo? pond = this.GetPondInfo(fish);
+            if (pond is null)
+                return;
+
+            this.DrawPondLeftPage(b, fish, pond, pageWidth);
+            this.DrawPondRightPage(b, pond, pageWidth);
+        }
+
+        /// <summary>Draw the pond spread's left page: fish name, max population, breeding speed and population gate requests.</summary>
+        private void DrawPondLeftPage(SpriteBatch b, FishEntry fish, PondInfo pond, int pageWidth)
+        {
+            int leftX = this.xPositionOnScreen;
+            int contentWidth = pageWidth - 2 * PagePadding;
+            int textX = leftX + PagePadding;
+            const int lineHeight = 30;
+
+            int y = this.DrawPageHeader(b, this.I18n.Get("menu.journal.pond.title"), leftX, pageWidth) + 22;
+
+            // fish sprite + name (so the spread is self-explanatory)
+            {
+                string name = fish.Data.DisplayName;
+                float nameWidth = Game1.smallFont.MeasureString(name).X;
+                int rowWidth = 48 + 12 + (int)Math.Min(nameWidth, contentWidth - 60);
+                int rowX = leftX + (pageWidth - rowWidth) / 2;
+                b.Draw(fish.Data.GetTexture(), new Vector2(rowX, y - 8), fish.Data.GetSourceRect(), Color.White, 0f, Vector2.Zero, 3f, SpriteEffects.None, 1f);
+                this.DrawTextFit(b, name, rowX + 60, y + 4, contentWidth - 60, Game1.textColor);
+            }
+            y += 52;
+
+            // max population
+            this.DrawTextFit(b, this.I18n.Get("menu.journal.pond.max-population", new { count = pond.MaxPopulation }), textX, y, contentWidth, Game1.textColor);
+            y += lineHeight;
+
+            // breeding speed
+            string spawn = pond.SpawnDays <= 1
+                ? this.I18n.Get("menu.journal.pond.spawn-daily")
+                : this.I18n.Get("menu.journal.pond.spawn-days", new { days = pond.SpawnDays });
+            y += this.DrawTextWrapped(b, spawn, textX, y, contentWidth, Game1.textColor, maxLines: 2) + 8;
+
+            // population gate requests
+            if (pond.Gates.Count > 0)
+            {
+                y += 6;
+                this.DrawTextFit(b, this.I18n.Get("menu.journal.pond.gates-label"), textX, y, contentWidth, Game1.textColor);
+                y += lineHeight + 2;
+
+                foreach (PondGate gate in pond.Gates)
+                {
+                    if (y > this.yPositionOnScreen + this.height - 90)
+                    {
+                        b.DrawString(Game1.smallFont, "…", new Vector2(textX, y), Game1.textColor * 0.7f);
+                        break;
+                    }
+
+                    string items = string.Join("  /  ", gate.Items.Select(item => $"{item.Item.DisplayName}{FormatStack(item.MinCount, item.MaxCount)}"));
+                    string line = this.I18n.Get("menu.journal.pond.gate-line", new { population = gate.Population, items });
+                    y += this.DrawTextWrapped(b, $"• {line}", textX, y, contentWidth, Game1.textColor * 0.9f, maxLines: 2) + 8;
+                }
+            }
+            else
+            {
+                y += 6;
+                y += this.DrawTextWrapped(b, this.I18n.Get("menu.journal.pond.no-gates"), textX, y, contentWidth, Game1.textColor * 0.9f, maxLines: 2) + 8;
+            }
+        }
+
+        /// <summary>Draw the pond spread's right page: producible items grouped by required population, with chances and quantities.</summary>
+        private void DrawPondRightPage(SpriteBatch b, PondInfo pond, int pageWidth)
+        {
+            int rightX = this.xPositionOnScreen + pageWidth;
+            int contentWidth = pageWidth - 2 * PagePadding;
+            int textX = rightX + PagePadding;
+
+            int ry = this.DrawPageHeader(b, this.I18n.Get("menu.journal.pond.produce-title"), rightX, pageWidth) + 22;
+
+            // the daily-roll note, pinned to the bottom of the page
+            int noteHeight = this.DrawBottomNote(b, this.I18n.Get("menu.journal.pond.produce-note"), textX, contentWidth);
+            int bottomLimit = this.yPositionOnScreen + this.height - noteHeight - 64;
+
+            if (pond.Drops.Count == 0)
+            {
+                string empty = this.I18n.Get("menu.journal.pond.produce-empty");
+                Vector2 size = Game1.smallFont.MeasureString(empty);
+                b.DrawString(Game1.smallFont, empty, new Vector2(rightX + (pageWidth - size.X) / 2, ry + 40), Game1.textColor * 0.6f);
+                return;
+            }
+
+            int lastPopulation = -1;
+            foreach (PondDrop drop in pond.Drops)
+            {
+                // group subheader per required population
+                int population = Math.Max(1, drop.RequiredPopulation);
+                bool needsHeader = population != lastPopulation;
+                if (ry + (needsHeader ? 62 : 34) > bottomLimit)
+                {
+                    b.DrawString(Game1.smallFont, "…", new Vector2(textX, ry), Game1.textColor * 0.7f);
+                    break;
+                }
+                if (needsHeader)
+                {
+                    if (lastPopulation != -1)
+                        ry += 6;
+                    this.DrawTextFit(b, this.I18n.Get("menu.journal.pond.produce-population", new { count = population }), textX, ry, contentWidth, new Color(120, 78, 43));
+                    ry += 28;
+                    lastPopulation = population;
+                }
+
+                // row: item icon + name + quantity on the left, chance right-aligned
+                string chance = FormatChance(drop.Chance);
+                float chanceWidth = Game1.smallFont.MeasureString(chance).X;
+                b.Draw(drop.Item.GetTexture(), new Vector2(textX + 8, ry - 2), drop.Item.GetSourceRect(), Color.White, 0f, Vector2.Zero, 2f, SpriteEffects.None, 1f);
+                this.DrawTextFit(b, $"{drop.Item.DisplayName}{FormatStack(drop.MinStack, drop.MaxStack)}", textX + 48, ry, contentWidth - 48 - (int)chanceWidth - 16, Game1.textColor * 0.9f);
+                b.DrawString(Game1.smallFont, chance, new Vector2(textX + contentWidth - chanceWidth, ry), Game1.textColor * 0.75f);
+                ry += 34;
+            }
+        }
+
+        /// <summary>Draw a muted note pinned to the bottom of a page, and get its height (including spacing).</summary>
+        private int DrawBottomNote(SpriteBatch b, string text, int x, int maxWidth)
+        {
+            string wrapped = this.WrapAndClampLines(text, maxWidth, maxLines: 3);
+            int height = (int)Game1.smallFont.MeasureString(wrapped).Y;
+            b.DrawString(Game1.smallFont, wrapped, new Vector2(x, this.yPositionOnScreen + this.height - height - 40), Game1.textColor * 0.6f);
+            return height;
+        }
+
+        /// <summary>Format a quantity range like " ×2" or " ×1–3" (empty for a single item).</summary>
+        private static string FormatStack(int min, int max)
+        {
+            if (min <= 1 && max <= 1)
+                return "";
+            return min == max ? $" ×{min}" : $" ×{min}–{max}";
+        }
+
+        /// <summary>Format a 0–1 chance as a percentage like "40%" (or "<1%" for tiny chances).</summary>
+        private static string FormatChance(float chance)
+        {
+            double percent = chance * 100;
+            if (percent > 0 && percent < 1)
+                return "<1%";
+            return $"{(int)Math.Round(percent)}%";
         }
 
 
