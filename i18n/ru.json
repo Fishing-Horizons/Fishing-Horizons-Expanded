@@ -92,5 +92,16 @@
     "menu.journal.note.fact.160": "Морской чёрт таится к северу от города. Подцепить его может лишь настоящий мастер.",
     "menu.journal.note.fact.163": "Легенда. Раз в поколение находится рыбак, что её вытащит. Может, это будешь ты.",
     "menu.journal.note.fact.682": "Карп-мутант... что-то в той сточной воде изменило его навсегда.",
-    "menu.journal.note.fact.775": "Ледниковая рыба прячется у ледяного мыса острова Наконечник. Одевайся теплее."
+    "menu.journal.note.fact.775": "Ледниковая рыба прячется у ледяного мыса острова Наконечник. Одевайся теплее.",
+    "menu.journal.pond.title": "Рыбий пруд",
+    "menu.journal.pond.max-population": "Макс. население: {{count}}",
+    "menu.journal.pond.spawn-daily": "Размножение: новая рыба каждый день",
+    "menu.journal.pond.spawn-days": "Размножение: новая рыба раз в {{days}} дн.",
+    "menu.journal.pond.gates-label": "Запросы для роста пруда:",
+    "menu.journal.pond.gate-line": "{{population}} рыб: {{items}}",
+    "menu.journal.pond.no-gates": "Пруд растёт сам, без запросов.",
+    "menu.journal.pond.produce-title": "Продукция пруда",
+    "menu.journal.pond.produce-population": "От {{count}} рыб:",
+    "menu.journal.pond.produce-empty": "Этот пруд ничего не производит.",
+    "menu.journal.pond.produce-note": "Пруд проверяется каждое утро — чем больше в нём рыб, тем выше шанс что-то найти."
 }
