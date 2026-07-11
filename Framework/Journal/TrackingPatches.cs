@@ -2,24 +2,19 @@ using System;
 using HarmonyLib;
 using StardewModdingAPI;
 using StardewValley;
-using StardewValley.Menus;
 using StardewValley.Tools;
-using SObject = StardewValley.Object;
 
 namespace FishingHorizonsExpanded.Framework.Journal
 {
     /// <summary>Harmony patches that record journal progress the game doesn't track by itself:
-    /// the catch diary, best catch quality, and "sold"/"gifted" status.</summary>
+    /// the catch diary and best catch quality.</summary>
     /// <remarks>
     /// Patched methods (Stardew Valley 1.6):
     /// <list type="bullet">
     ///   <item><see cref="Farmer.caughtFish"/> — catch diary entries + size records.</item>
     ///   <item><see cref="FishingRod.pullFishFromWater"/> — best catch quality.</item>
-    ///   <item><see cref="NPC.receiveGift"/> — "gifted" status.</item>
-    ///   <item><see cref="ShopMenu.receiveLeftClick"/> / <see cref="ShopMenu.receiveRightClick"/> — "sold" status.</item>
     /// </list>
-    /// All patches are postfixes (plus passive prefixes for the shop diff) and swallow their own
-    /// exceptions, so a failure can never crash the game.
+    /// All patches are postfixes and swallow their own exceptions, so a failure can never crash the game.
     /// </remarks>
     internal static class TrackingPatches
     {
@@ -54,20 +49,6 @@ namespace FishingHorizonsExpanded.Framework.Journal
             harmony.Patch(
                 original: AccessTools.Method(typeof(FishingRod), nameof(FishingRod.pullFishFromWater)),
                 postfix: new HarmonyMethod(typeof(TrackingPatches), nameof(After_PullFishFromWater))
-            );
-            harmony.Patch(
-                original: AccessTools.Method(typeof(NPC), nameof(NPC.receiveGift)),
-                postfix: new HarmonyMethod(typeof(TrackingPatches), nameof(After_ReceiveGift))
-            );
-            harmony.Patch(
-                original: AccessTools.Method(typeof(ShopMenu), nameof(ShopMenu.receiveLeftClick)),
-                prefix: new HarmonyMethod(typeof(TrackingPatches), nameof(Before_ShopClick)),
-                postfix: new HarmonyMethod(typeof(TrackingPatches), nameof(After_ShopClick))
-            );
-            harmony.Patch(
-                original: AccessTools.Method(typeof(ShopMenu), nameof(ShopMenu.receiveRightClick)),
-                prefix: new HarmonyMethod(typeof(TrackingPatches), nameof(Before_ShopClick)),
-                postfix: new HarmonyMethod(typeof(TrackingPatches), nameof(After_ShopClick))
             );
         }
 
@@ -127,78 +108,5 @@ namespace FishingHorizonsExpanded.Framework.Journal
             }
         }
 
-        /// <summary>After an NPC receives a gift: mark gifted fish.</summary>
-        private static void After_ReceiveGift(SObject o, Farmer giver)
-        {
-            try
-            {
-                if (giver?.IsLocalPlayer != true || o is null)
-                    return;
-
-                if (o.Category == SObject.FishCategory)
-                    Progress.MarkGifted(o.QualifiedItemId);
-            }
-            catch (Exception ex)
-            {
-                Monitor.LogOnce($"Failed to record a gifted fish in the journal:\n{ex}", LogLevel.Warn);
-            }
-        }
-
-        /// <summary>Before a shop click: remember which fish (if any) is about to be sold.</summary>
-        private static void Before_ShopClick(ShopMenu __instance, int x, int y, bool ____isStorageShop, ref (string Id, int Count)? __state)
-        {
-            __state = null;
-            try
-            {
-                if (____isStorageShop || Game1.player is null)
-                    return;
-
-                // the clicked inventory item is sold instantly if the shop buys it
-                if (__instance.inventory?.getItemAt(x, y) is SObject obj
-                    && obj.Category == SObject.FishCategory
-                    && __instance.highlightItemToSell(obj))
-                {
-                    __state = (obj.QualifiedItemId, CountInInventory(obj.QualifiedItemId));
-                }
-            }
-            catch (Exception ex)
-            {
-                Monitor.LogOnce($"Failed to snapshot the shop inventory for sale tracking:\n{ex}", LogLevel.Warn);
-            }
-        }
-
-        /// <summary>After a shop click: if the remembered fish count decreased, it was sold.</summary>
-        private static void After_ShopClick((string Id, int Count)? __state)
-        {
-            try
-            {
-                if (__state is null)
-                    return;
-
-                (string id, int before) = __state.Value;
-                if (CountInInventory(id) < before)
-                    Progress.MarkSold(id);
-            }
-            catch (Exception ex)
-            {
-                Monitor.LogOnce($"Failed to record a sold fish in the journal:\n{ex}", LogLevel.Warn);
-            }
-        }
-
-
-        /*********
-        ** Private methods — helpers
-        *********/
-        /// <summary>Count how many items with the given qualified ID the player has in their inventory.</summary>
-        private static int CountInInventory(string qualifiedId)
-        {
-            int count = 0;
-            foreach (Item? item in Game1.player.Items)
-            {
-                if (item?.QualifiedItemId == qualifiedId)
-                    count += item.Stack;
-            }
-            return count;
-        }
     }
 }
