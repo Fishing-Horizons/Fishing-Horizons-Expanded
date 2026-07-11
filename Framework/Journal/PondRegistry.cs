@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Buildings;
 using StardewValley.GameData.FishPonds;
@@ -107,6 +108,13 @@ namespace FishingHorizonsExpanded.Framework.Journal
     internal static class PondRegistry
     {
         /*********
+        ** Accessors
+        *********/
+        /// <summary>The SMAPI monitor for diagnostics, set by the journal module on activation.</summary>
+        public static IMonitor? Monitor { get; set; }
+
+
+        /*********
         ** Public methods
         *********/
         /// <summary>Get the pond info for a fish, or null if it can't live in a fish pond.</summary>
@@ -116,9 +124,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
             {
                 return Build(fish);
             }
-            catch
+            catch (Exception ex)
             {
                 // broken pond data — treat as "can't live in a pond"
+                Monitor?.Log($"Pond info failed for {fish.QualifiedId}: {ex}", LogLevel.Debug);
                 return null;
             }
         }
@@ -127,19 +136,40 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /*********
         ** Private methods
         *********/
+        /// <summary>Log why a fish has no pond page (for troubleshooting).</summary>
+        private static void LogSkip(FishEntry fish, string reason)
+        {
+            Monitor?.Log($"No pond page for {fish.QualifiedId}: {reason}.", LogLevel.Debug);
+        }
+
+
         /// <summary>Build the pond info for a fish, or return null if it can't live in a pond.</summary>
         private static PondInfo? Build(FishEntry fish)
         {
             if (ItemRegistry.Create(fish.QualifiedId, allowNull: true) is not SObject obj)
+            {
+                LogSkip(fish, "couldn't create item instance");
                 return null;
+            }
 
             // the game only allows fish items in ponds, and excludes legendaries and opt-outs (see FishPond::doAction)
-            if (obj.Category != SObject.FishCategory || obj.HasContextTag("fish_legendary") || obj.HasContextTag("fish_pond_ignore"))
+            if (obj.Category != SObject.FishCategory)
+            {
+                LogSkip(fish, $"item category {obj.Category} isn't the fish category ({SObject.FishCategory})");
                 return null;
+            }
+            if (obj.HasContextTag("fish_legendary") || obj.HasContextTag("fish_pond_ignore"))
+            {
+                LogSkip(fish, "fish is legendary or tagged fish_pond_ignore");
+                return null;
+            }
 
             FishPondData? data = FishPond.GetRawData(fish.Id);
             if (data is null)
+            {
+                LogSkip(fish, "no matching entry in Data/FishPondData");
                 return null;
+            }
 
             // spawn time: -1 means the game derives it from the fish's price
             int spawnDays = data.SpawnTime;
@@ -201,6 +231,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 .ThenByDescending(drop => drop.Chance)
                 .ToList();
 
+            Monitor?.Log($"Pond page ready for {fish.QualifiedId}: population {maxPopulation}, {gates.Count} gates, {drops.Count} drops.", LogLevel.Debug);
             return new PondInfo(maxPopulation, spawnDays, gates, drops);
         }
 

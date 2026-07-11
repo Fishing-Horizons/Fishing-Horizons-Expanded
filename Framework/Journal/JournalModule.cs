@@ -70,6 +70,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
         {
             this.Progress = new ProgressTracker(helper);
             TrackingPatches.Apply(this.Mod.ModManifest.UniqueID, this.Mod.Monitor, this.Progress);
+            PondRegistry.Monitor = this.Mod.Monitor;
 
             helper.Events.Content.AssetRequested += this.OnAssetRequested;
             helper.Events.Content.LocaleChanged += this.OnLocaleChanged;
