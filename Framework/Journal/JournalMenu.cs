@@ -46,7 +46,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
         private const double InchesToCm = 2.54;
 
         /// <summary>The height reserved at the top of every page for a section title, so the grid is identical on all pages.</summary>
-        private const int HeaderHeight = 56;
+        private const int HeaderHeight = 64;
 
         /// <summary>The smallest text scale used when shrinking text to fit its area.</summary>
         private const float MinTextScale = 0.8f;
@@ -126,7 +126,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
             // build the list pages: each section starts on a fresh page with its title,
             // then continues with untitled pages of 4 fish until the section ends
-            foreach (JournalSection section in FishRegistry.BuildSections(modRegistry, i18n.Get("menu.journal.section.vanilla")))
+            foreach (JournalSection section in FishRegistry.BuildSections(modRegistry, i18n.Get("menu.journal.section.vanilla"), i18n))
             {
                 this.AllFish.AddRange(section.Fish);
                 for (int i = 0; i < section.Fish.Count; i += FishPerPage)
@@ -333,6 +333,11 @@ namespace FishingHorizonsExpanded.Framework.Journal
             this.DrawTextCentered(b, collection, this.xPositionOnScreen + pageWidth / 2, cy, contentWidth);
             this.DrawProgressBar(b, this.xPositionOnScreen + PagePadding + 32, cy + 44, contentWidth - 64, 16, total > 0 ? (float)caught / total : 0f);
 
+            // Willy's handwritten dedication (flavor)
+            string quote = this.WrapAndClampLines(this.I18n.Get("menu.journal.flavor-quote"), contentWidth - 32, maxLines: 3);
+            Vector2 quoteSize = Game1.smallFont.MeasureString(quote);
+            b.DrawString(Game1.smallFont, quote, new Vector2(this.xPositionOnScreen + (pageWidth - quoteSize.X) / 2, cy + 110), new Color(120, 78, 43) * 0.9f);
+
             string hint = this.I18n.Get("menu.journal.turn-page-hint");
             Vector2 hintSize = Game1.smallFont.MeasureString(hint);
             b.DrawString(
@@ -364,7 +369,6 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 ? ((int)Math.Round(log.Average(e => e.SizeInches) * InchesToCm)).ToString()
                 : "—";
 
-            const int lineHeight = 40;
             var lines = new List<string>
             {
                 this.I18n.Get("menu.journal.stats.total-caught", new { count = totalCatches }),
@@ -374,10 +378,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 this.I18n.Get("menu.journal.stats.avg-size", new { cm = avgSize }),
             };
             foreach (string line in lines)
-            {
-                this.DrawTextFit(b, line, textX, y, contentWidth, Game1.textColor);
-                y += lineHeight;
-            }
+                y += this.DrawTextWrapped(b, line, textX, y, contentWidth, Game1.textColor, maxLines: 2) + 12;
 
             // best fisherman note in multiplayer (small flavor line)
             if (Game1.getOnlineFarmers().Count > 1)
@@ -442,26 +443,27 @@ namespace FishingHorizonsExpanded.Framework.Journal
             Page page = this.Pages[pageIndex];
 
             if (page.Header is not null)
-                this.DrawPageHeader(b, page.Header, pageX, pageWidth);
+                this.DrawPageHeader(b, page.Header, pageX, pageWidth, scale: 1.2f);
 
             for (int slot = 0; slot < page.Fish.Count; slot++)
                 this.DrawFishCell(b, page.Fish[slot], this.GetSlotBounds(pageX, pageWidth, slot));
         }
 
-        /// <summary>Draw a page header: centered title with a divider line and a small diamond ornament.</summary>
-        private void DrawPageHeader(SpriteBatch b, string title, int pageX, int pageWidth)
+        /// <summary>Draw a page header: centered title with a divider line and a small diamond ornament. Returns the header's bottom screen coordinate.</summary>
+        private int DrawPageHeader(SpriteBatch b, string title, int pageX, int pageWidth, float scale = 1f)
         {
-            title = this.FitToWidth(title, pageWidth - 96, Game1.dialogueFont);
-            Vector2 size = Game1.dialogueFont.MeasureString(title);
+            title = this.FitToWidth(title, (int)((pageWidth - 96) / scale), Game1.dialogueFont);
+            Vector2 size = Game1.dialogueFont.MeasureString(title) * scale;
             Vector2 position = new((int)(pageX + (pageWidth - size.X) / 2), this.yPositionOnScreen + 24);
-            Utility.drawTextWithShadow(b, title, Game1.dialogueFont, position, Game1.textColor);
+            Utility.drawTextWithShadow(b, title, Game1.dialogueFont, position, Game1.textColor, scale);
 
-            // divider line with a diamond ornament in the middle
+            // divider line with a diamond ornament in the middle (the diamond rotates around its center)
             int lineY = (int)(position.Y + size.Y + 4);
             int centerX = pageX + pageWidth / 2;
             b.Draw(Game1.staminaRect, new Rectangle(pageX + 48, lineY, pageWidth / 2 - 48 - 14, 2), Game1.textColor * 0.35f);
             b.Draw(Game1.staminaRect, new Rectangle(centerX + 14, lineY, pageWidth / 2 - 48 - 14, 2), Game1.textColor * 0.35f);
-            b.Draw(Game1.staminaRect, new Rectangle(centerX - 4, lineY - 3, 8, 8), null, Game1.textColor * 0.35f, MathF.PI / 4f, new Vector2(0.5f, 0.5f), SpriteEffects.None, 1f);
+            b.Draw(Game1.staminaRect, new Rectangle(centerX, lineY + 1, 8, 8), null, Game1.textColor * 0.35f, MathF.PI / 4f, new Vector2(0.5f, 0.5f), SpriteEffects.None, 1f);
+            return lineY + 2;
         }
 
         /// <summary>Draw a page number at the bottom center of a page.</summary>
@@ -485,13 +487,14 @@ namespace FishingHorizonsExpanded.Framework.Journal
             string info = caught
                 ? this.I18n.Get("menu.journal.caught-count", new { count = fish.TimesCaught() })
                 : this.I18n.Get("menu.journal.not-caught-hint");
-            name = this.FitToWidth(name, (int)(bounds.Width / textScale) - 8);
-            info = this.FitToWidth(info, (int)(bounds.Width / textScale) - 8);
-            Vector2 nameSize = Game1.smallFont.MeasureString(name) * textScale;
+            int cellTextWidth = (int)(bounds.Width / textScale) - 8;
+            string[] nameLines = this.WrapAndClampLines(name, cellTextWidth, maxLines: 2).Split('\n');
+            info = this.FitToWidth(info, cellTextWidth);
+            int nameLineHeight = (int)(Game1.smallFont.MeasureString("Ag").Y * textScale);
             Vector2 infoSize = Game1.smallFont.MeasureString(info) * textScale;
 
             // center the content block vertically in the slot (based on the unhovered size, so nothing jumps)
-            int contentHeight = spriteSize + 2 + (int)nameSize.Y + (int)infoSize.Y;
+            int contentHeight = spriteSize + 2 + nameLines.Length * nameLineHeight + (int)infoSize.Y;
             int top = bounds.Y + Math.Max(0, (bounds.Height - contentHeight) / 2);
 
             // sprite (black silhouette if not caught yet), scaled around its center on hover
@@ -511,11 +514,17 @@ namespace FishingHorizonsExpanded.Framework.Journal
                     b.Draw(Game1.mouseCursors, new Vector2(bounds.Right - 40, bounds.Y + 8), star.Value, Color.White, 0f, Vector2.Zero, 3f, SpriteEffects.None, 1f);
             }
 
-            // name (hidden until caught)
-            Utility.drawTextWithShadow(b, name, Game1.smallFont, new Vector2((int)(bounds.X + (bounds.Width - nameSize.X) / 2), top + spriteSize + 2), Game1.textColor, textScale);
+            // name (hidden until caught), wrapped to two centered lines when long
+            int textY = top + spriteSize + 2;
+            foreach (string line in nameLines)
+            {
+                float lineWidth = Game1.smallFont.MeasureString(line).X * textScale;
+                Utility.drawTextWithShadow(b, line, Game1.smallFont, new Vector2((int)(bounds.X + (bounds.Width - lineWidth) / 2), textY), Game1.textColor, textScale);
+                textY += nameLineHeight;
+            }
 
             // brief info
-            b.DrawString(Game1.smallFont, info, new Vector2((int)(bounds.X + (bounds.Width - infoSize.X) / 2), top + spriteSize + 2 + (int)nameSize.Y), Game1.textColor * 0.6f, 0f, Vector2.Zero, textScale, SpriteEffects.None, 1f);
+            b.DrawString(Game1.smallFont, info, new Vector2((int)(bounds.X + (bounds.Width - infoSize.X) / 2), textY), Game1.textColor * 0.6f, 0f, Vector2.Zero, textScale, SpriteEffects.None, 1f);
         }
 
 
@@ -653,45 +662,42 @@ namespace FishingHorizonsExpanded.Framework.Journal
             b.DrawString(Game1.smallFont, note, new Vector2(noteX, innerY + 28), Game1.textColor * 0.9f);
         }
 
-        /// <summary>Build Willy's note from the fish's real data (where to find it + the best season/weather/time), with per-fish phrasing so notes don't all read the same.</summary>
+        /// <summary>Build Willy's short note: a fun fact for fish that have one, otherwise one compact data-driven tip (place + best conditions).</summary>
         private string GetWillyNote(FishEntry fish)
         {
             if (fish.IsTrapFish)
                 return this.I18n.Get("menu.journal.note.trap");
+
+            // curated fun fact, if this fish has one
+            string baseId = fish.QualifiedId.StartsWith("(O)") ? fish.QualifiedId[3..] : fish.QualifiedId;
+            Translation fact = this.I18n.Get($"menu.journal.note.fact.{baseId}");
+            if (fact.HasValue())
+                return fact;
 
             // stable per-fish hash (string.GetHashCode is randomized per game launch)
             int hash = 0;
             foreach (char c in fish.QualifiedId)
                 hash = (hash * 31 + c) & 0x7FFFFFFF;
 
-            var parts = new List<string>();
-
-            // where
+            // one compact tip: place + the most useful condition (weather > time > season)
             string? location = fish.Locations.Keys.OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase).FirstOrDefault();
-            if (location is not null)
-                parts.Add(this.I18n.Get($"menu.journal.note.where.{1 + hash % 3}", new { location }));
-
-            // when: seasons + weather + time
-            var whenParts = new List<string>();
-            HashSet<string> seasons = this.GetActiveSeasons(fish);
-            whenParts.Add(seasons.Count >= 4
-                ? this.I18n.Get("menu.journal.note.when.all-year")
-                : string.Join(", ", seasons
-                    .OrderBy(s => Array.IndexOf(new[] { "spring", "summer", "fall", "winter" }, s.ToLowerInvariant()))
-                    .Select(s => (string)this.I18n.Get($"menu.journal.note.when.season.{s.ToLowerInvariant()}"))));
-            if (fish.Weather == "rainy")
-                whenParts.Add(this.I18n.Get("menu.journal.note.when.rain"));
-            else if (fish.Weather == "sunny")
-                whenParts.Add(this.I18n.Get("menu.journal.note.when.sun"));
+            string when;
             bool allDay = fish.TimeRanges.Count == 0 || fish.TimeRanges.Any(r => r.X <= 600 && r.Y >= 2600);
-            if (!allDay && fish.TimeRanges.Count > 0)
-                whenParts.Add(this.I18n.Get("menu.journal.note.when.time", new { from = FormatTime(fish.TimeRanges[0].X), to = FormatTime(fish.TimeRanges[0].Y) }));
-            parts.Add(this.I18n.Get($"menu.journal.note.when.{1 + (hash / 3) % 3}", new { when = string.Join(", ", whenParts) }));
+            HashSet<string> seasons = this.GetActiveSeasons(fish);
+            if (fish.Weather == "rainy")
+                when = this.I18n.Get("menu.journal.note.when.rain");
+            else if (!allDay && fish.TimeRanges.Count > 0)
+                when = this.I18n.Get("menu.journal.note.when.time", new { from = FormatTime(fish.TimeRanges[0].X), to = FormatTime(fish.TimeRanges[0].Y) });
+            else if (seasons.Count < 4)
+                when = string.Join(", ", seasons
+                    .OrderBy(s => Array.IndexOf(new[] { "spring", "summer", "fall", "winter" }, s.ToLowerInvariant()))
+                    .Select(s => (string)this.I18n.Get($"menu.journal.note.when.season.{s.ToLowerInvariant()}")));
+            else
+                when = this.I18n.Get("menu.journal.note.when.all-year");
 
-            // flavor ending
-            parts.Add(this.I18n.Get($"menu.journal.note.ending.{1 + (hash / 9) % 3}"));
-
-            return string.Join(" ", parts);
+            return location is not null
+                ? this.I18n.Get($"menu.journal.note.tip.{1 + hash % 3}", new { location, when })
+                : this.I18n.Get("menu.journal.note.tip.no-location", new { when });
         }
 
         /// <summary>Draw the detail spread's right page: world map with catch markers, locations, season/time/weather.</summary>
@@ -702,9 +708,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
             int textX = rightX + PagePadding;
             int ry = this.yPositionOnScreen + 32;
 
-            // header
-            this.DrawPageHeader(b, this.I18n.Get("menu.journal.detail.where-when-title"), rightX, pageWidth);
-            ry += HeaderHeight + 4;
+            // header (the map starts below its real bottom edge, which varies by language/font)
+            int headerBottom = this.DrawPageHeader(b, this.I18n.Get("menu.journal.detail.where-when-title"), rightX, pageWidth);
+            ry = headerBottom + 26;
 
             // world map with catch markers
             if (this.WorldMap is not null)
@@ -741,11 +747,12 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 ry += (int)Game1.smallFont.MeasureString(wrappedList).Y + 12;
             }
 
-            // season + weather icons on one aligned row
+            // season icons (own row, so labels never collide in any language)
             HashSet<string> activeSeasons = this.GetActiveSeasons(fish);
-            this.DrawTextFit(b, this.I18n.Get("menu.journal.detail.season-label"), textX, ry, contentWidth / 2 - 120, Game1.textColor);
             {
-                int iconX = textX + 120;
+                string label = this.I18n.Get("menu.journal.detail.season-label");
+                this.DrawTextFit(b, label, textX, ry, contentWidth - 4 * 46 - 16, Game1.textColor);
+                int iconX = textX + (int)Math.Min(Game1.smallFont.MeasureString(label).X, contentWidth - 4 * 46 - 16) + 16;
                 string[] seasonKeys = { "spring", "summer", "fall", "winter" };
                 for (int i = 0; i < 4; i++)
                 {
@@ -754,22 +761,26 @@ namespace FishingHorizonsExpanded.Framework.Journal
                     iconX += 46;
                 }
             }
+            ry += 38;
+
+            // weather icons (own row)
             {
-                int weatherX = textX + contentWidth / 2 + 40;
-                this.DrawTextFit(b, this.I18n.Get("menu.journal.detail.weather-label"), weatherX, ry, contentWidth / 2 - 140, Game1.textColor);
+                string label = this.I18n.Get("menu.journal.detail.weather-label");
+                this.DrawTextFit(b, label, textX, ry, contentWidth - 2 * 46 - 16, Game1.textColor);
+                int iconX = textX + (int)Math.Min(Game1.smallFont.MeasureString(label).X, contentWidth - 2 * 46 - 16) + 16;
                 bool sunny = fish.Weather is "sunny" or "both";
                 bool rainy = fish.Weather is "rainy" or "both";
-                b.Draw(Game1.mouseCursors, new Vector2(weatherX + 110, ry + 4), new Rectangle(341, 421, 12, 8), sunny ? Color.White : Color.Black * 0.2f, 0f, Vector2.Zero, 3f, SpriteEffects.None, 1f);
-                b.Draw(Game1.mouseCursors, new Vector2(weatherX + 110 + 46, ry + 4), new Rectangle(365, 421, 12, 8), rainy ? Color.White : Color.Black * 0.2f, 0f, Vector2.Zero, 3f, SpriteEffects.None, 1f);
+                b.Draw(Game1.mouseCursors, new Vector2(iconX, ry + 4), new Rectangle(341, 421, 12, 8), sunny ? Color.White : Color.Black * 0.2f, 0f, Vector2.Zero, 3f, SpriteEffects.None, 1f);
+                b.Draw(Game1.mouseCursors, new Vector2(iconX + 46, ry + 4), new Rectangle(365, 421, 12, 8), rainy ? Color.White : Color.Black * 0.2f, 0f, Vector2.Zero, 3f, SpriteEffects.None, 1f);
             }
-            ry += 42;
+            ry += 38;
 
             // time (text only)
             bool allDay = fish.TimeRanges.Count == 0 || fish.TimeRanges.Any(r => r.X <= 600 && r.Y >= 2600);
             string timeText = allDay
                 ? this.I18n.Get("menu.journal.detail.time.all-day")
                 : string.Join(", ", fish.TimeRanges.Select(r => $"{FormatTime(r.X)}–{FormatTime(r.Y)}"));
-            this.DrawTextFit(b, this.I18n.Get("menu.journal.detail.time-line", new { time = timeText }), textX, ry, contentWidth, Game1.textColor);
+            this.DrawTextWrapped(b, this.I18n.Get("menu.journal.detail.time-line", new { time = timeText }), textX, ry, contentWidth, Game1.textColor, maxLines: 2);
         }
 
         /// <summary>Get the catch marker positions for a fish, as 0–1 fractions of the world map texture (cached).</summary>
@@ -877,9 +888,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 this.DrawDiaryEntries(b, entries.Skip(linesPerPage), this.xPositionOnScreen + pageWidth + PagePadding, contentTop, pageWidth - 2 * PagePadding, lineHeight);
             }
 
-            // total catches at the bottom of the left page
-            int totalCatches = this.AllFish.Sum(f => f.TimesCaught());
-            this.DrawTextCentered(b, this.I18n.Get("menu.journal.diary.total", new { count = totalCatches }), this.xPositionOnScreen + pageWidth / 2, this.yPositionOnScreen + this.height - 88, pageWidth - 2 * PagePadding);
+            // today's catches at the bottom of the left page
+            WorldDate today = Game1.Date;
+            int caughtToday = log.Count(e => e.Year == today.Year && e.Season == today.SeasonKey && e.Day == today.DayOfMonth);
+            this.DrawTextCentered(b, this.I18n.Get("menu.journal.diary.today", new { count = caughtToday }), this.xPositionOnScreen + pageWidth / 2, this.yPositionOnScreen + this.height - 88, pageWidth - 2 * PagePadding);
         }
 
         /// <summary>Draw a column of diary entries.</summary>
@@ -891,9 +903,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
                     ? fishEntry.Data.DisplayName
                     : ItemRegistry.GetDataOrErrorItem(entry.QualifiedId).DisplayName;
                 string date = this.I18n.Get("menu.journal.diary.date", new { season = this.GetSeasonDisplayName(entry.Season), day = entry.Day, year = entry.Year });
-                string line = this.FitToWidth($"{date} — {fishName} — {(int)Math.Round(entry.SizeInches * InchesToCm)} {this.I18n.Get("menu.journal.cm")}", width);
-                b.DrawString(Game1.smallFont, line, new Vector2(x, y), Game1.textColor * 0.9f);
-                y += lineHeight;
+                string line = $"{date} — {fishName} — {(int)Math.Round(entry.SizeInches * InchesToCm)} {this.I18n.Get("menu.journal.cm")}";
+                b.DrawString(Game1.smallFont, this.WrapAndClampLines(line, width, maxLines: 2), new Vector2(x, y), Game1.textColor * 0.9f);
+                y += Game1.smallFont.MeasureString(line).X > width ? lineHeight * 2 - 8 : lineHeight;
             }
         }
 
@@ -926,6 +938,14 @@ namespace FishingHorizonsExpanded.Framework.Journal
             if (width * scale > maxWidth)
                 text = this.FitToWidth(text, (int)(maxWidth / scale));
             Utility.drawTextWithShadow(b, text, Game1.smallFont, new Vector2(x, y), color, scale);
+        }
+
+        /// <summary>Draw text with the standard SDV text shadow, word-wrapped to at most <paramref name="maxLines"/> lines. Returns the drawn height in pixels.</summary>
+        private int DrawTextWrapped(SpriteBatch b, string text, int x, int y, int maxWidth, Color color, int maxLines = 2)
+        {
+            string wrapped = this.WrapAndClampLines(text, maxWidth, maxLines);
+            Utility.drawTextWithShadow(b, wrapped, Game1.smallFont, new Vector2(x, y), color);
+            return (int)Game1.smallFont.MeasureString(wrapped).Y;
         }
 
         /// <summary>Draw a horizontally centered line of text with the standard SDV text shadow, shrinking/truncating it to fit.</summary>

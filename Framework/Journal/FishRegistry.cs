@@ -149,6 +149,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>Vanilla <c>Data/Fish</c> entries that aren't caught with the fishing minigame (algae/seaweed and trash), excluded from the journal.</summary>
         private static readonly HashSet<string> NonMinigameIds = new() { "152", "153", "157", "167", "168", "169", "170", "171", "172", "173" };
 
+        /// <summary>The mod translations, used for fallback location names (set by <see cref="BuildSections"/>).</summary>
+        private static ITranslationHelper? I18n;
+
         /// <summary>Internal/technical location keys in <c>Data/Locations</c> that must never show up as catch locations.</summary>
         private static readonly HashSet<string> HiddenLocations = new(StringComparer.OrdinalIgnoreCase) { "Default", "fishingGame", "Temp" };
 
@@ -159,8 +162,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>Build the journal sections: vanilla fish first, then one section per mod.</summary>
         /// <param name="modRegistry">The SMAPI mod registry, used to resolve mod display names.</param>
         /// <param name="vanillaSectionTitle">The translated title of the vanilla section.</param>
-        public static List<JournalSection> BuildSections(IModRegistry modRegistry, string vanillaSectionTitle)
+        public static List<JournalSection> BuildSections(IModRegistry modRegistry, string vanillaSectionTitle, ITranslationHelper? i18n = null)
         {
+            I18n = i18n;
             var fishData = Game1.content.Load<Dictionary<string, string>>("Data\\Fish");
             var bySource = new Dictionary<string, List<FishEntry>>(); // key: "" for vanilla, else mod ID or raw prefix
             var byQualifiedId = new Dictionary<string, FishEntry>();
@@ -362,7 +366,15 @@ namespace FishingHorizonsExpanded.Framework.Journal
             }
             catch
             {
-                // fall through to raw name
+                // fall through to the fallback name
+            }
+
+            // some vanilla locations (like the Ginger Island areas) have no display name in Data/Locations
+            if (I18n is not null)
+            {
+                Translation fallback = I18n.Get($"menu.journal.location.{locationName}");
+                if (fallback.HasValue())
+                    return fallback;
             }
             return locationName;
         }
