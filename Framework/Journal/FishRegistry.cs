@@ -114,8 +114,8 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>Group by source mod (vanilla first, then one section per mod).</summary>
         Mods,
 
-        /// <summary>Group by world region (ocean, rivers, mountains, ...). A fish caught in several regions appears in each.</summary>
-        Regions,
+        /// <summary>Group by catch location (one section per location). A fish caught in several locations appears in each.</summary>
+        Locations,
     }
 
     /// <summary>A journal section: a group of fish from one source (vanilla or a specific mod).</summary>
@@ -127,6 +127,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>The translated section title.</summary>
         public string Title { get; }
 
+        /// <summary>The short label shown on the section's bookmark tab.</summary>
+        public string TabLabel { get; }
+
         /// <summary>The fish in this section.</summary>
         public List<FishEntry> Fish { get; }
 
@@ -134,9 +137,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /*********
         ** Public methods
         *********/
-        public JournalSection(string title, List<FishEntry> fish)
+        public JournalSection(string title, List<FishEntry> fish, string? tabLabel = null)
         {
             this.Title = title;
+            this.TabLabel = tabLabel ?? title;
             this.Fish = fish;
         }
     }
@@ -166,8 +170,11 @@ namespace FishingHorizonsExpanded.Framework.Journal
         private static readonly HashSet<string> HiddenLocations = new(StringComparer.OrdinalIgnoreCase) { "Default", "fishingGame", "Temp" };
 
 
-        /// <summary>The journal regions in display order. Each maps to a <c>menu.journal.region.*</c> translation key.</summary>
-        private static readonly string[] RegionOrder = { "ocean", "river", "mountain", "underground", "desert", "island", "other" };
+        /// <summary>The vanilla fishing locations in journal display order. Locations not listed here (like mod locations) are appended alphabetically.</summary>
+        private static readonly string[] LocationOrder = { "Town", "Forest", "Mountain", "Beach", "BeachNightMarket", "Submarine", "Woods", "Backwoods", "Railroad", "Desert", "UndergroundMine", "Sewer", "BugLand", "WitchSwamp", "IslandSouth", "IslandSouthEast", "IslandSouthEastCave", "IslandSecret", "IslandWest", "IslandNorth", "Caldera", "Farm" };
+
+        /// <summary>The resolved display names of locations with fish (internal name → display name), filled by <see cref="PopulateLocations"/>.</summary>
+        private static readonly Dictionary<string, string> LocationTitles = new(StringComparer.OrdinalIgnoreCase);
 
 
         /*********
@@ -206,10 +213,11 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 byQualifiedId[entry.QualifiedId] = entry;
             }
 
+            LocationTitles.Clear();
             PopulateLocations(byQualifiedId);
 
-            return sortMode == JournalSortMode.Regions
-                ? BuildRegionSections(byQualifiedId.Values)
+            return sortMode == JournalSortMode.Locations
+                ? BuildLocationSections(byQualifiedId.Values)
                 : BuildModSections(modRegistry, vanillaSectionTitle, bySource);
         }
 
@@ -240,73 +248,79 @@ namespace FishingHorizonsExpanded.Framework.Journal
             return sections;
         }
 
-        /// <summary>Build the sections for the "regions" sort. A fish caught in several regions appears in each of them.</summary>
-        private static List<JournalSection> BuildRegionSections(IEnumerable<FishEntry> allFish)
+        /// <summary>Build the sections for the "locations" sort: one section per catch location, then crab pot fish, then fish without location data. A fish caught in several locations appears in each of them.</summary>
+        private static List<JournalSection> BuildLocationSections(IEnumerable<FishEntry> allFish)
         {
-            var byRegion = new Dictionary<string, List<FishEntry>>();
+            var byLocation = new Dictionary<string, List<FishEntry>>(StringComparer.OrdinalIgnoreCase);
+            var traps = new List<FishEntry>();
+            var other = new List<FishEntry>();
+
             foreach (FishEntry fish in allFish)
             {
-                foreach (string region in GetRegionKeys(fish))
+                var locationNames = new HashSet<string>(fish.LocationInternalNames.Values, StringComparer.OrdinalIgnoreCase);
+                if (locationNames.Count == 0)
                 {
-                    if (!byRegion.TryGetValue(region, out List<FishEntry>? list))
-                        byRegion[region] = list = new List<FishEntry>();
+                    (fish.IsTrapFish ? traps : other).Add(fish);
+                    continue;
+                }
+
+                foreach (string name in locationNames)
+                {
+                    if (!byLocation.TryGetValue(name, out List<FishEntry>? list))
+                        byLocation[name] = list = new List<FishEntry>();
                     list.Add(fish);
                 }
             }
 
+            // vanilla locations in their fixed order, then anything else (like mod locations) alphabetically by title
+            var orderedNames = new List<string>(LocationOrder.Where(byLocation.ContainsKey));
+            orderedNames.AddRange(
+                byLocation.Keys
+                    .Where(name => !LocationOrder.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    .OrderBy(GetLocationTitle, StringComparer.OrdinalIgnoreCase)
+            );
+
             var sections = new List<JournalSection>();
-            foreach (string region in RegionOrder)
+            foreach (string name in orderedNames)
             {
-                if (byRegion.TryGetValue(region, out List<FishEntry>? fish))
-                    sections.Add(new JournalSection(GetRegionTitle(region), Sorted(fish)));
+                string title = GetLocationTitle(name);
+                sections.Add(new JournalSection(title, Sorted(byLocation[name]), GetTabLabel(name, title)));
             }
+            if (traps.Count > 0)
+                sections.Add(new JournalSection(GetTranslation("menu.journal.section.traps", "Crab Pot Catch"), Sorted(traps), GetTranslation("menu.journal.tab.traps", "Traps")));
+            if (other.Count > 0)
+                sections.Add(new JournalSection(GetTranslation("menu.journal.section.other", "Other Waters"), Sorted(other), GetTranslation("menu.journal.tab.other", "Other")));
             return sections;
         }
 
-        /// <summary>Get the regions where a fish can be caught, based on its catch locations (or its trap water type as a fallback).</summary>
-        private static HashSet<string> GetRegionKeys(FishEntry fish)
+        /// <summary>Get the full display title for a location section.</summary>
+        private static string GetLocationTitle(string internalName)
         {
-            var regions = new HashSet<string>();
-            foreach (string internalName in fish.LocationInternalNames.Values)
-                regions.Add(GetRegionKey(internalName));
-
-            if (regions.Count == 0)
-            {
-                if (fish.IsTrapFish)
-                    regions.Add(fish.TrapWaterType?.Equals("ocean", StringComparison.OrdinalIgnoreCase) == true ? "ocean" : "river");
-                else
-                    regions.Add("other");
-            }
-            return regions;
+            return LocationTitles.TryGetValue(internalName, out string? title) ? title : internalName;
         }
 
-        /// <summary>Map an internal location name (from <c>Data/Locations</c>) to a journal region key.</summary>
-        private static string GetRegionKey(string internalName)
-        {
-            if (internalName.StartsWith("Island", StringComparison.OrdinalIgnoreCase) || internalName.Equals("Caldera", StringComparison.OrdinalIgnoreCase))
-                return "island";
-
-            return internalName switch
-            {
-                "Beach" or "BeachNightMarket" or "Submarine" => "ocean",
-                "Town" or "Forest" or "Railroad" => "river",
-                "Mountain" or "Woods" or "Backwoods" => "mountain",
-                "UndergroundMine" or "Mine" or "Sewer" or "BugLand" or "WitchSwamp" => "underground",
-                "Desert" => "desert",
-                _ => "other",
-            };
-        }
-
-        /// <summary>Get the translated title for a region section.</summary>
-        private static string GetRegionTitle(string region)
+        /// <summary>Get the short bookmark tab label for a location (via <c>menu.journal.tab.*</c>), falling back to its full title.</summary>
+        private static string GetTabLabel(string internalName, string fullTitle)
         {
             if (I18n is not null)
             {
-                Translation title = I18n.Get($"menu.journal.region.{region}");
-                if (title.HasValue())
-                    return title;
+                Translation label = I18n.Get($"menu.journal.tab.{internalName}");
+                if (label.HasValue())
+                    return label;
             }
-            return region;
+            return fullTitle;
+        }
+
+        /// <summary>Get a translation with a hardcoded fallback if the key is missing.</summary>
+        private static string GetTranslation(string key, string fallback)
+        {
+            if (I18n is not null)
+            {
+                Translation translation = I18n.Get(key);
+                if (translation.HasValue())
+                    return translation;
+            }
+            return fallback;
         }
 
 
@@ -396,6 +410,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
                     }
 
                     baseDisplayName ??= GetLocationDisplayName(locationName, locationData);
+                    LocationTitles[locationName] = baseDisplayName;
 
                     // append the fish area name if the spawn is limited to a named sub-area (like the forest pond vs the river)
                     string displayName = baseDisplayName;
@@ -454,23 +469,34 @@ namespace FishingHorizonsExpanded.Framework.Journal
                     if (!string.IsNullOrWhiteSpace(parsed))
                         return parsed;
                 }
-
-                string? fromInstance = Game1.getLocationFromName(locationName)?.DisplayName;
-                if (!string.IsNullOrWhiteSpace(fromInstance))
-                    return fromInstance;
             }
             catch
             {
                 // fall through to the fallback name
             }
 
-            // some vanilla locations (like the Ginger Island areas) have no display name in Data/Locations
+            // some vanilla locations (like the Ginger Island areas or the Witch's Swamp) have no display name
+            // in Data/Locations, so check the mod translations before asking the location instance: the game's
+            // GameLocation.DisplayName falls back to the raw internal name (like "IslandWest"), which would
+            // otherwise hide these translations
             if (I18n is not null)
             {
                 Translation fallback = I18n.Get($"menu.journal.location.{locationName}");
                 if (fallback.HasValue())
                     return fallback;
             }
+
+            try
+            {
+                string? fromInstance = Game1.getLocationFromName(locationName)?.DisplayName;
+                if (!string.IsNullOrWhiteSpace(fromInstance) && !fromInstance.Equals(locationName, StringComparison.Ordinal))
+                    return fromInstance;
+            }
+            catch
+            {
+                // fall through to the raw name
+            }
+
             return locationName;
         }
 

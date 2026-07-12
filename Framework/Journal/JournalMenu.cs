@@ -84,8 +84,26 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>How the fish list is grouped into sections (kept for the whole game session).</summary>
         private static JournalSortMode SortMode = JournalSortMode.Mods;
 
-        /// <summary>The bookmarks shown above the book: the fixed "start" and "end" bookmarks plus one tab per section.</summary>
+        /// <summary>The bookmarks shown above the book: the fixed "start" and "end" bookmarks plus the visible section tabs.</summary>
         private readonly List<Bookmark> Bookmarks = new();
+
+        /// <summary>All section tabs (short label + target spread), including the ones scrolled out of view.</summary>
+        private readonly List<(string Label, int Spread)> SectionTabs = new();
+
+        /// <summary>The index of the first visible section tab (for scrolling when there are more tabs than fit).</summary>
+        private int TabScrollOffset;
+
+        /// <summary>Whether the section tabs overflow the strip, so the scroll arrows are shown.</summary>
+        private bool TabsOverflow;
+
+        /// <summary>Whether more tabs are hidden to the right of the visible ones.</summary>
+        private bool CanScrollTabsRight;
+
+        /// <summary>The tab strip's left scroll arrow (only when <see cref="TabsOverflow"/>).</summary>
+        private Rectangle TabLeftArrowBounds;
+
+        /// <summary>The tab strip's right scroll arrow (only when <see cref="TabsOverflow"/>).</summary>
+        private Rectangle TabRightArrowBounds;
 
         /// <summary>The sort mode toggle button (left of the book).</summary>
         private Rectangle SortButtonBounds;
@@ -131,6 +149,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
         /// <summary>A bookmark tab above the book that jumps to a spread when clicked.</summary>
         private sealed record Bookmark(string Label, int TargetSpread, Rectangle Bounds, bool IsEdge);
+
+        /// <summary>The height of the bookmark tabs above the book (the bottom 14px tuck behind the book edge).</summary>
+        private const int TabHeight = 76;
 
         /// <summary>The index of the diary spread (always the last spread).</summary>
         private int DiarySpread => this.SpreadCount - 1;
@@ -201,10 +222,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
             this.Bookmarks.Clear();
 
             // build the list pages and remember each section's first spread for its bookmark
-            var sectionSpreads = new List<(string Title, int Spread)>();
+            this.SectionTabs.Clear();
             foreach (JournalSection section in FishRegistry.BuildSections(this.ModRegistry, this.I18n.Get("menu.journal.section.vanilla"), this.I18n, SortMode))
             {
-                sectionSpreads.Add((section.Title, 1 + this.Pages.Count / 2));
+                this.SectionTabs.Add((section.TabLabel, 1 + this.Pages.Count / 2));
                 for (int i = 0; i < section.Fish.Count; i += FishPerPage)
                 {
                     this.Pages.Add(new Page(
@@ -229,18 +250,21 @@ namespace FishingHorizonsExpanded.Framework.Journal
             this.SpreadCount = 1 + (int)Math.Ceiling(this.Pages.Count / 2.0) + 1;
             this.Spread = Math.Clamp(this.Spread, 0, this.SpreadCount - 1);
 
-            this.LayoutBookmarks(sectionSpreads);
+            this.TabScrollOffset = Math.Clamp(this.TabScrollOffset, 0, Math.Max(0, this.SectionTabs.Count - 1));
+            this.LayoutBookmarks();
         }
 
-        /// <summary>Lay out the bookmark tabs above the book: "start" pinned to the top left corner, "end" to the top right, section tabs in between.</summary>
-        private void LayoutBookmarks(List<(string Title, int Spread)> sectionSpreads)
+        /// <summary>Lay out the bookmark tabs above the book: "start" pinned to the top left corner, "end" to the top right, section tabs in between. When the tabs don't fit, scroll arrows appear at both ends of the strip.</summary>
+        private void LayoutBookmarks()
         {
-            const int height = 52;
+            const int height = TabHeight;
             const int gap = 8;
             const int padding = 20;
             int y = this.yPositionOnScreen - height + 14; // the bottom edge tucks behind the book
 
-            int MeasureWidth(string label) => (int)Game1.smallFont.MeasureString(label).X + 2 * padding;
+            int MeasureWidth(string label) => Math.Min((int)Game1.smallFont.MeasureString(label).X + 2 * padding, 220);
+
+            this.Bookmarks.Clear();
 
             // fixed bookmarks: start (top left) and end (top right)
             string startLabel = this.I18n.Get("menu.journal.bookmark.start");
@@ -249,24 +273,39 @@ namespace FishingHorizonsExpanded.Framework.Journal
             int endWidth = Math.Min(MeasureWidth(endLabel), 180);
             var start = new Bookmark(startLabel, 0, new Rectangle(this.xPositionOnScreen + 8, y, startWidth, height), IsEdge: true);
             var end = new Bookmark(endLabel, this.SpreadCount - 1, new Rectangle(this.xPositionOnScreen + this.width - 8 - endWidth, y, endWidth, height), IsEdge: true);
+            this.Bookmarks.Add(start);
+            this.Bookmarks.Add(end);
 
             // section tabs share the space between the fixed bookmarks
-            this.Bookmarks.Add(start);
-            if (sectionSpreads.Count > 0)
-            {
-                int left = start.Bounds.Right + gap;
-                int available = end.Bounds.X - gap - left;
-                int maxTabWidth = Math.Max(48, (available - (sectionSpreads.Count - 1) * gap) / sectionSpreads.Count);
+            int stripLeft = start.Bounds.Right + gap;
+            int stripRight = end.Bounds.X - gap;
+            int[] widths = this.SectionTabs.Select(tab => MeasureWidth(tab.Label)).ToArray();
+            this.TabsOverflow = widths.Sum() + Math.Max(0, widths.Length - 1) * gap > stripRight - stripLeft;
 
-                int x = left;
-                foreach ((string title, int spread) in sectionSpreads)
-                {
-                    int tabWidth = Math.Min(MeasureWidth(title), maxTabWidth);
-                    this.Bookmarks.Add(new Bookmark(title, spread, new Rectangle(x, y, tabWidth, height), IsEdge: false));
-                    x += tabWidth + gap;
-                }
+            if (this.TabsOverflow)
+            {
+                // reserve room for the scroll arrows at both ends of the strip
+                int arrowY = y + (height - 14 - 44) / 2; // centered in the visible part of the tabs
+                this.TabLeftArrowBounds = new Rectangle(stripLeft, arrowY, 40, 44);
+                this.TabRightArrowBounds = new Rectangle(stripRight - 40, arrowY, 40, 44);
+                stripLeft = this.TabLeftArrowBounds.Right + gap;
+                stripRight = this.TabRightArrowBounds.X - gap;
             }
-            this.Bookmarks.Add(end);
+            else
+                this.TabScrollOffset = 0;
+
+            int x = stripLeft;
+            int index = this.TabScrollOffset;
+            for (; index < this.SectionTabs.Count; index++)
+            {
+                int tabWidth = Math.Min(widths[index], stripRight - stripLeft); // even a single oversized tab stays visible
+                if (x + tabWidth > stripRight)
+                    break;
+                (string label, int spread) = this.SectionTabs[index];
+                this.Bookmarks.Add(new Bookmark(label, spread, new Rectangle(x, y, tabWidth, height), IsEdge: false));
+                x += tabWidth + gap;
+            }
+            this.CanScrollTabsRight = index < this.SectionTabs.Count;
         }
 
         /// <summary>Whether a bookmark matches the currently open spread (for highlighting).</summary>
@@ -278,9 +317,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 return this.Spread == bookmark.TargetSpread;
 
             // a section tab is active while the reader is inside that section
-            int next = this.Bookmarks
-                .Where(other => !other.IsEdge && other.TargetSpread > bookmark.TargetSpread)
-                .Select(other => other.TargetSpread)
+            int next = this.SectionTabs
+                .Where(other => other.Spread > bookmark.TargetSpread)
+                .Select(other => other.Spread)
                 .DefaultIfEmpty(this.DiarySpread)
                 .Min();
             return this.Spread >= bookmark.TargetSpread && this.Spread < next;
@@ -301,9 +340,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
             bool wasDiary = this.Spread == this.DiarySpread;
             bool wasTitle = this.Spread == 0;
 
-            SortMode = SortMode == JournalSortMode.Mods ? JournalSortMode.Regions : JournalSortMode.Mods;
+            SortMode = SortMode == JournalSortMode.Mods ? JournalSortMode.Locations : JournalSortMode.Mods;
             this.DetailFish = null;
             this.ShowPondPage = false;
+            this.TabScrollOffset = 0;
             this.RebuildPages();
 
             // the title and diary spreads keep their place; list pages land on the first list spread
@@ -317,7 +357,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>Get the translated name of the current sort mode.</summary>
         private string GetSortModeName()
         {
-            return this.I18n.Get(SortMode == JournalSortMode.Regions ? "menu.journal.sort.regions" : "menu.journal.sort.mods");
+            return this.I18n.Get(SortMode == JournalSortMode.Locations ? "menu.journal.sort.locations" : "menu.journal.sort.mods");
         }
 
         /// <summary>Draw the bookmark tabs (behind the book, so they stick out of its top edge) and the sort button.</summary>
@@ -342,6 +382,17 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 b.DrawString(Game1.smallFont, label, new Vector2((int)(bounds.X + (bounds.Width - size.X) / 2), (int)(bounds.Y + (bounds.Height - 14 - size.Y) / 2)), textColor);
             }
 
+            // tab strip scroll arrows
+            if (this.TabsOverflow)
+            {
+                bool canLeft = this.TabScrollOffset > 0;
+                bool canRight = this.CanScrollTabsRight;
+                bool leftHovered = canLeft && this.TabLeftArrowBounds.Contains(Game1.getMouseX(), Game1.getMouseY());
+                bool rightHovered = canRight && this.TabRightArrowBounds.Contains(Game1.getMouseX(), Game1.getMouseY());
+                b.Draw(Game1.mouseCursors, new Vector2(this.TabLeftArrowBounds.X + 2, this.TabLeftArrowBounds.Y + 6), new Rectangle(352, 495, 12, 11), (canLeft ? Color.White : Color.White * 0.35f) * (leftHovered ? 1f : 0.9f), 0f, Vector2.Zero, 3f, SpriteEffects.None, 1f);
+                b.Draw(Game1.mouseCursors, new Vector2(this.TabRightArrowBounds.X + 2, this.TabRightArrowBounds.Y + 6), new Rectangle(365, 495, 12, 11), (canRight ? Color.White : Color.White * 0.35f) * (rightHovered ? 1f : 0.9f), 0f, Vector2.Zero, 3f, SpriteEffects.None, 1f);
+            }
+
             // sort mode toggle button
             bool sortHovered = this.SortButtonBounds.Contains(Game1.getMouseX(), Game1.getMouseY());
             drawTextureBox(b, Game1.mouseCursors, new Rectangle(384, 396, 15, 15), this.SortButtonBounds.X, this.SortButtonBounds.Y, this.SortButtonBounds.Width, this.SortButtonBounds.Height, sortHovered ? Color.Wheat : Color.White, 4f, drawShadow: false);
@@ -358,6 +409,31 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 return;
             }
             base.receiveLeftClick(x, y, playSound);
+
+            // tab strip scroll arrows
+            if (this.TabsOverflow)
+            {
+                if (this.TabLeftArrowBounds.Contains(x, y))
+                {
+                    if (this.TabScrollOffset > 0)
+                    {
+                        this.TabScrollOffset--;
+                        this.LayoutBookmarks();
+                        Game1.playSound("shiny4");
+                    }
+                    return;
+                }
+                if (this.TabRightArrowBounds.Contains(x, y))
+                {
+                    if (this.CanScrollTabsRight)
+                    {
+                        this.TabScrollOffset++;
+                        this.LayoutBookmarks();
+                        Game1.playSound("shiny4");
+                    }
+                    return;
+                }
+            }
 
             // bookmarks and the sort button work everywhere (they close any open detail view)
             foreach (Bookmark bookmark in this.Bookmarks)
@@ -463,7 +539,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 : null;
 
             this.HoverText = this.SortButtonBounds.Contains(x, y)
-                ? this.I18n.Get("menu.journal.sort.hover", new { mode = this.GetSortModeName() })
+                ? this.I18n.Get("menu.journal.sort.hover", new { mode = this.GetSortModeName() }).ToString()
                 : null;
         }
 
