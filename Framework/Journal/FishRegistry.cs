@@ -108,6 +108,16 @@ namespace FishingHorizonsExpanded.Framework.Journal
         }
     }
 
+    /// <summary>How the journal's fish list is grouped into sections.</summary>
+    internal enum JournalSortMode
+    {
+        /// <summary>Group by source mod (vanilla first, then one section per mod).</summary>
+        Mods,
+
+        /// <summary>Group by world region (ocean, rivers, mountains, ...). A fish caught in several regions appears in each.</summary>
+        Regions,
+    }
+
     /// <summary>A journal section: a group of fish from one source (vanilla or a specific mod).</summary>
     internal sealed class JournalSection
     {
@@ -156,13 +166,17 @@ namespace FishingHorizonsExpanded.Framework.Journal
         private static readonly HashSet<string> HiddenLocations = new(StringComparer.OrdinalIgnoreCase) { "Default", "fishingGame", "Temp" };
 
 
+        /// <summary>The journal regions in display order. Each maps to a <c>menu.journal.region.*</c> translation key.</summary>
+        private static readonly string[] RegionOrder = { "ocean", "river", "mountain", "underground", "desert", "island", "other" };
+
+
         /*********
         ** Public methods
         *********/
-        /// <summary>Build the journal sections: vanilla fish first, then one section per mod.</summary>
+        /// <summary>Build the journal sections grouped by the given sort mode.</summary>
         /// <param name="modRegistry">The SMAPI mod registry, used to resolve mod display names.</param>
         /// <param name="vanillaSectionTitle">The translated title of the vanilla section.</param>
-        public static List<JournalSection> BuildSections(IModRegistry modRegistry, string vanillaSectionTitle, ITranslationHelper? i18n = null)
+        public static List<JournalSection> BuildSections(IModRegistry modRegistry, string vanillaSectionTitle, ITranslationHelper? i18n = null, JournalSortMode sortMode = JournalSortMode.Mods)
         {
             I18n = i18n;
             var fishData = Game1.content.Load<Dictionary<string, string>>("Data\\Fish");
@@ -194,6 +208,18 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
             PopulateLocations(byQualifiedId);
 
+            return sortMode == JournalSortMode.Regions
+                ? BuildRegionSections(byQualifiedId.Values)
+                : BuildModSections(modRegistry, vanillaSectionTitle, bySource);
+        }
+
+
+        /*********
+        ** Private methods — grouping
+        *********/
+        /// <summary>Build the sections for the "mods" sort: vanilla fish first, then one section per mod.</summary>
+        private static List<JournalSection> BuildModSections(IModRegistry modRegistry, string vanillaSectionTitle, Dictionary<string, List<FishEntry>> bySource)
+        {
             var sections = new List<JournalSection>();
 
             // vanilla first
@@ -212,6 +238,75 @@ namespace FishingHorizonsExpanded.Framework.Journal
             sections.AddRange(modSections.OrderBy(section => section.Title, StringComparer.OrdinalIgnoreCase));
 
             return sections;
+        }
+
+        /// <summary>Build the sections for the "regions" sort. A fish caught in several regions appears in each of them.</summary>
+        private static List<JournalSection> BuildRegionSections(IEnumerable<FishEntry> allFish)
+        {
+            var byRegion = new Dictionary<string, List<FishEntry>>();
+            foreach (FishEntry fish in allFish)
+            {
+                foreach (string region in GetRegionKeys(fish))
+                {
+                    if (!byRegion.TryGetValue(region, out List<FishEntry>? list))
+                        byRegion[region] = list = new List<FishEntry>();
+                    list.Add(fish);
+                }
+            }
+
+            var sections = new List<JournalSection>();
+            foreach (string region in RegionOrder)
+            {
+                if (byRegion.TryGetValue(region, out List<FishEntry>? fish))
+                    sections.Add(new JournalSection(GetRegionTitle(region), Sorted(fish)));
+            }
+            return sections;
+        }
+
+        /// <summary>Get the regions where a fish can be caught, based on its catch locations (or its trap water type as a fallback).</summary>
+        private static HashSet<string> GetRegionKeys(FishEntry fish)
+        {
+            var regions = new HashSet<string>();
+            foreach (string internalName in fish.LocationInternalNames.Values)
+                regions.Add(GetRegionKey(internalName));
+
+            if (regions.Count == 0)
+            {
+                if (fish.IsTrapFish)
+                    regions.Add(fish.TrapWaterType?.Equals("ocean", StringComparison.OrdinalIgnoreCase) == true ? "ocean" : "river");
+                else
+                    regions.Add("other");
+            }
+            return regions;
+        }
+
+        /// <summary>Map an internal location name (from <c>Data/Locations</c>) to a journal region key.</summary>
+        private static string GetRegionKey(string internalName)
+        {
+            if (internalName.StartsWith("Island", StringComparison.OrdinalIgnoreCase) || internalName.Equals("Caldera", StringComparison.OrdinalIgnoreCase))
+                return "island";
+
+            return internalName switch
+            {
+                "Beach" or "BeachNightMarket" or "Submarine" => "ocean",
+                "Town" or "Forest" or "Railroad" => "river",
+                "Mountain" or "Woods" or "Backwoods" => "mountain",
+                "UndergroundMine" or "Mine" or "Sewer" or "BugLand" or "WitchSwamp" => "underground",
+                "Desert" => "desert",
+                _ => "other",
+            };
+        }
+
+        /// <summary>Get the translated title for a region section.</summary>
+        private static string GetRegionTitle(string region)
+        {
+            if (I18n is not null)
+            {
+                Translation title = I18n.Get($"menu.journal.region.{region}");
+                if (title.HasValue())
+                    return title;
+            }
+            return region;
         }
 
 

@@ -60,6 +60,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>The mod translations.</summary>
         private readonly ITranslationHelper I18n;
 
+        /// <summary>The SMAPI mod registry, used to resolve section titles when grouping by mod.</summary>
+        private readonly IModRegistry ModRegistry;
+
         /// <summary>The tracked journal progress (best quality/catch diary).</summary>
         private readonly ProgressTracker Progress;
 
@@ -76,7 +79,19 @@ namespace FishingHorizonsExpanded.Framework.Journal
         private int Spread;
 
         /// <summary>The total number of spreads.</summary>
-        private readonly int SpreadCount;
+        private int SpreadCount;
+
+        /// <summary>How the fish list is grouped into sections (kept for the whole game session).</summary>
+        private static JournalSortMode SortMode = JournalSortMode.Mods;
+
+        /// <summary>The bookmarks shown above the book: the fixed "start" and "end" bookmarks plus one tab per section.</summary>
+        private readonly List<Bookmark> Bookmarks = new();
+
+        /// <summary>The sort mode toggle button (left of the book).</summary>
+        private Rectangle SortButtonBounds;
+
+        /// <summary>The hover tooltip to draw this frame, if any.</summary>
+        private string? HoverText;
 
         /// <summary>The fish whose detail spread is open, if any.</summary>
         private FishEntry? DetailFish;
@@ -114,6 +129,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>A single list page: an optional section title (only on the section's first page) and up to <see cref="FishPerPage"/> fish.</summary>
         private sealed record Page(string? Header, List<FishEntry> Fish);
 
+        /// <summary>A bookmark tab above the book that jumps to a spread when clicked.</summary>
+        private sealed record Bookmark(string Label, int TargetSpread, Rectangle Bounds, bool IsEdge);
+
         /// <summary>The index of the diary spread (always the last spread).</summary>
         private int DiarySpread => this.SpreadCount - 1;
 
@@ -130,26 +148,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 showUpperRightCloseButton: true)
         {
             this.I18n = i18n;
+            this.ModRegistry = modRegistry;
             this.Progress = progress;
 
-            // build the list pages: each section starts on a fresh page with its title,
-            // then continues with untitled pages of 4 fish until the section ends
-            foreach (JournalSection section in FishRegistry.BuildSections(modRegistry, i18n.Get("menu.journal.section.vanilla"), i18n))
-            {
-                this.AllFish.AddRange(section.Fish);
-                for (int i = 0; i < section.Fish.Count; i += FishPerPage)
-                {
-                    this.Pages.Add(new Page(
-                        Header: i == 0 ? section.Title : null,
-                        Fish: section.Fish.Skip(i).Take(FishPerPage).ToList()
-                    ));
-                }
-            }
-            foreach (FishEntry fish in this.AllFish)
-                this.FishById[fish.QualifiedId] = fish;
-
-            // spreads: title + fish lists + diary
-            this.SpreadCount = 1 + (int)Math.Ceiling(this.Pages.Count / 2.0) + 1;
+            this.RebuildPages();
 
             // optional textures (the journal still works without them)
             try
@@ -181,6 +183,169 @@ namespace FishingHorizonsExpanded.Framework.Journal
             this.BackButton = new ClickableTextureComponent(
                 new Rectangle(this.xPositionOnScreen - 64, this.yPositionOnScreen + this.height - 60, 48, 44),
                 Game1.mouseCursors, new Rectangle(352, 495, 12, 11), 4f);
+
+            // sort mode toggle button (top left of the book)
+            this.SortButtonBounds = new Rectangle(this.xPositionOnScreen - 64, this.yPositionOnScreen + 16, 52, 52);
+        }
+
+
+        /*********
+        ** Private methods — sections, sorting & bookmarks
+        *********/
+        /// <summary>Build the list pages and bookmarks for the current sort mode. Each section starts on a fresh page with its title.</summary>
+        private void RebuildPages()
+        {
+            this.Pages.Clear();
+            this.AllFish.Clear();
+            this.FishById.Clear();
+            this.Bookmarks.Clear();
+
+            // build the list pages and remember each section's first spread for its bookmark
+            var sectionSpreads = new List<(string Title, int Spread)>();
+            foreach (JournalSection section in FishRegistry.BuildSections(this.ModRegistry, this.I18n.Get("menu.journal.section.vanilla"), this.I18n, SortMode))
+            {
+                sectionSpreads.Add((section.Title, 1 + this.Pages.Count / 2));
+                for (int i = 0; i < section.Fish.Count; i += FishPerPage)
+                {
+                    this.Pages.Add(new Page(
+                        Header: i == 0 ? section.Title : null,
+                        Fish: section.Fish.Skip(i).Take(FishPerPage).ToList()
+                    ));
+                }
+
+                // each section starts on a fresh spread, so its bookmark always lands on its title page
+                if (this.Pages.Count % 2 != 0)
+                    this.Pages.Add(new Page(Header: null, Fish: new List<FishEntry>()));
+
+                // collection stats must count every fish exactly once (the regions sort repeats fish across sections)
+                foreach (FishEntry fish in section.Fish)
+                {
+                    if (this.FishById.TryAdd(fish.QualifiedId, fish))
+                        this.AllFish.Add(fish);
+                }
+            }
+
+            // spreads: title + fish lists + diary
+            this.SpreadCount = 1 + (int)Math.Ceiling(this.Pages.Count / 2.0) + 1;
+            this.Spread = Math.Clamp(this.Spread, 0, this.SpreadCount - 1);
+
+            this.LayoutBookmarks(sectionSpreads);
+        }
+
+        /// <summary>Lay out the bookmark tabs above the book: "start" pinned to the top left corner, "end" to the top right, section tabs in between.</summary>
+        private void LayoutBookmarks(List<(string Title, int Spread)> sectionSpreads)
+        {
+            const int height = 52;
+            const int gap = 8;
+            const int padding = 20;
+            int y = this.yPositionOnScreen - height + 14; // the bottom edge tucks behind the book
+
+            int MeasureWidth(string label) => (int)Game1.smallFont.MeasureString(label).X + 2 * padding;
+
+            // fixed bookmarks: start (top left) and end (top right)
+            string startLabel = this.I18n.Get("menu.journal.bookmark.start");
+            string endLabel = this.I18n.Get("menu.journal.bookmark.end");
+            int startWidth = Math.Min(MeasureWidth(startLabel), 180);
+            int endWidth = Math.Min(MeasureWidth(endLabel), 180);
+            var start = new Bookmark(startLabel, 0, new Rectangle(this.xPositionOnScreen + 8, y, startWidth, height), IsEdge: true);
+            var end = new Bookmark(endLabel, this.SpreadCount - 1, new Rectangle(this.xPositionOnScreen + this.width - 8 - endWidth, y, endWidth, height), IsEdge: true);
+
+            // section tabs share the space between the fixed bookmarks
+            this.Bookmarks.Add(start);
+            if (sectionSpreads.Count > 0)
+            {
+                int left = start.Bounds.Right + gap;
+                int available = end.Bounds.X - gap - left;
+                int maxTabWidth = Math.Max(48, (available - (sectionSpreads.Count - 1) * gap) / sectionSpreads.Count);
+
+                int x = left;
+                foreach ((string title, int spread) in sectionSpreads)
+                {
+                    int tabWidth = Math.Min(MeasureWidth(title), maxTabWidth);
+                    this.Bookmarks.Add(new Bookmark(title, spread, new Rectangle(x, y, tabWidth, height), IsEdge: false));
+                    x += tabWidth + gap;
+                }
+            }
+            this.Bookmarks.Add(end);
+        }
+
+        /// <summary>Whether a bookmark matches the currently open spread (for highlighting).</summary>
+        private bool IsBookmarkActive(Bookmark bookmark)
+        {
+            if (this.DetailFish is not null)
+                return false;
+            if (bookmark.IsEdge)
+                return this.Spread == bookmark.TargetSpread;
+
+            // a section tab is active while the reader is inside that section
+            int next = this.Bookmarks
+                .Where(other => !other.IsEdge && other.TargetSpread > bookmark.TargetSpread)
+                .Select(other => other.TargetSpread)
+                .DefaultIfEmpty(this.DiarySpread)
+                .Min();
+            return this.Spread >= bookmark.TargetSpread && this.Spread < next;
+        }
+
+        /// <summary>Jump to a spread, closing any open detail view.</summary>
+        private void JumpToSpread(int spread)
+        {
+            this.DetailFish = null;
+            this.ShowPondPage = false;
+            this.Spread = Math.Clamp(spread, 0, this.SpreadCount - 1);
+            Game1.playSound("shwip");
+        }
+
+        /// <summary>Switch to the next sort mode and rebuild the pages and bookmarks.</summary>
+        private void CycleSortMode()
+        {
+            bool wasDiary = this.Spread == this.DiarySpread;
+            bool wasTitle = this.Spread == 0;
+
+            SortMode = SortMode == JournalSortMode.Mods ? JournalSortMode.Regions : JournalSortMode.Mods;
+            this.DetailFish = null;
+            this.ShowPondPage = false;
+            this.RebuildPages();
+
+            // the title and diary spreads keep their place; list pages land on the first list spread
+            if (wasDiary)
+                this.Spread = this.DiarySpread;
+            else if (!wasTitle)
+                this.Spread = Math.Min(1, this.SpreadCount - 1);
+            Game1.playSound("smallSelect");
+        }
+
+        /// <summary>Get the translated name of the current sort mode.</summary>
+        private string GetSortModeName()
+        {
+            return this.I18n.Get(SortMode == JournalSortMode.Regions ? "menu.journal.sort.regions" : "menu.journal.sort.mods");
+        }
+
+        /// <summary>Draw the bookmark tabs (behind the book, so they stick out of its top edge) and the sort button.</summary>
+        private void DrawBookmarks(SpriteBatch b)
+        {
+            foreach (Bookmark bookmark in this.Bookmarks)
+            {
+                bool active = this.IsBookmarkActive(bookmark);
+                bool hovered = bookmark.Bounds.Contains(Game1.getMouseX(), Game1.getMouseY());
+
+                // inactive tabs sit slightly lower, like real bookmarks behind the cover
+                Rectangle bounds = bookmark.Bounds;
+                if (!active && !hovered)
+                    bounds.Y += 6;
+
+                Color tint = bookmark.IsEdge ? new Color(198, 111, 74) : new Color(222, 184, 128);
+                drawTextureBox(b, Game1.mouseCursors, new Rectangle(384, 396, 15, 15), bounds.X, bounds.Y, bounds.Width, bounds.Height, active || hovered ? tint : tint * 0.8f, 4f, drawShadow: false);
+
+                string label = this.FitToWidth(bookmark.Label, bounds.Width - 24);
+                Vector2 size = Game1.smallFont.MeasureString(label);
+                Color textColor = active ? Game1.textColor : Game1.textColor * 0.7f;
+                b.DrawString(Game1.smallFont, label, new Vector2((int)(bounds.X + (bounds.Width - size.X) / 2), (int)(bounds.Y + (bounds.Height - 14 - size.Y) / 2)), textColor);
+            }
+
+            // sort mode toggle button
+            bool sortHovered = this.SortButtonBounds.Contains(Game1.getMouseX(), Game1.getMouseY());
+            drawTextureBox(b, Game1.mouseCursors, new Rectangle(384, 396, 15, 15), this.SortButtonBounds.X, this.SortButtonBounds.Y, this.SortButtonBounds.Width, this.SortButtonBounds.Height, sortHovered ? Color.Wheat : Color.White, 4f, drawShadow: false);
+            b.Draw(Game1.mouseCursors, new Vector2(this.SortButtonBounds.X + 10, this.SortButtonBounds.Y + 10), new Rectangle(162, 440, 16, 16), Color.White, 0f, Vector2.Zero, 2f, SpriteEffects.None, 1f);
         }
 
         /// <inheritdoc/>
@@ -193,6 +358,21 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 return;
             }
             base.receiveLeftClick(x, y, playSound);
+
+            // bookmarks and the sort button work everywhere (they close any open detail view)
+            foreach (Bookmark bookmark in this.Bookmarks)
+            {
+                if (bookmark.Bounds.Contains(x, y))
+                {
+                    this.JumpToSpread(bookmark.TargetSpread);
+                    return;
+                }
+            }
+            if (this.SortButtonBounds.Contains(x, y))
+            {
+                this.CycleSortMode();
+                return;
+            }
 
             // detail spread: the back button returns to the previous page, the next arrow opens the pond page
             if (this.DetailFish is not null)
@@ -281,6 +461,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
             this.HoveredFish = this.DetailFish is null && this.Spread > 0 && this.Spread < this.DiarySpread
                 ? this.GetFishAt(x, y)
                 : null;
+
+            this.HoverText = this.SortButtonBounds.Contains(x, y)
+                ? this.I18n.Get("menu.journal.sort.hover", new { mode = this.GetSortModeName() })
+                : null;
         }
 
         /// <inheritdoc/>
@@ -288,6 +472,9 @@ namespace FishingHorizonsExpanded.Framework.Journal
         {
             // dim the game behind the menu
             b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.5f);
+
+            // bookmarks stick out of the book's top edge, so they're drawn first (behind the cover)
+            this.DrawBookmarks(b);
 
             // book background: a single box (one clean shadow) with a subtle spine down the middle
             int pageWidth = this.width / 2;
@@ -336,6 +523,10 @@ namespace FishingHorizonsExpanded.Framework.Journal
             }
 
             base.draw(b);
+
+            if (this.HoverText is not null)
+                drawHoverText(b, this.HoverText, Game1.smallFont);
+
             this.drawMouse(b);
         }
 
