@@ -171,7 +171,13 @@ namespace FishingHorizonsExpanded.Framework.Journal
 
 
         /// <summary>The vanilla fishing locations in journal display order. Locations not listed here (like mod locations) are appended alphabetically.</summary>
-        private static readonly string[] LocationOrder = { "Town", "Forest", "Mountain", "Beach", "BeachNightMarket", "Submarine", "Woods", "Backwoods", "Railroad", "Desert", "UndergroundMine", "Sewer", "BugLand", "WitchSwamp", "IslandSouth", "IslandSouthEast", "IslandSouthEastCave", "IslandSecret", "IslandWest", "IslandNorth", "Caldera", "Farm" };
+        private static readonly string[] LocationOrder = { "Town", "Forest", "Mountain", "Beach", "BeachNightMarket", "Submarine", "Woods", "Backwoods", "Railroad", "Desert", "UndergroundMine", "Sewer", "BugLand", "WitchSwamp", IslandGroupKey, "Caldera", "Farm" };
+
+        /// <summary>The synthetic section key that groups all Ginger Island areas (except the volcano caldera).</summary>
+        private const string IslandGroupKey = "GingerIsland";
+
+        /// <summary>The Ginger Island areas in display order, used to sort the direction abbreviations in "Ginger Island (S, SE, ...)".</summary>
+        private static readonly string[] IslandPartOrder = { "IslandSouth", "IslandSouthEast", "IslandSouthEastCave", "IslandSecret", "IslandWest", "IslandNorth" };
 
         /// <summary>The resolved display names of locations with fish (internal name → display name), filled by <see cref="PopulateLocations"/>.</summary>
         private static readonly Dictionary<string, string> LocationTitles = new(StringComparer.OrdinalIgnoreCase);
@@ -264,11 +270,13 @@ namespace FishingHorizonsExpanded.Framework.Journal
                     continue;
                 }
 
-                foreach (string name in locationNames)
+                foreach (string rawName in locationNames)
                 {
+                    string name = IsIslandLocation(rawName) ? IslandGroupKey : rawName; // all island areas share one section
                     if (!byLocation.TryGetValue(name, out List<FishEntry>? list))
                         byLocation[name] = list = new List<FishEntry>();
-                    list.Add(fish);
+                    if (!list.Contains(fish))
+                        list.Add(fish);
                 }
             }
 
@@ -296,7 +304,41 @@ namespace FishingHorizonsExpanded.Framework.Journal
         /// <summary>Get the full display title for a location section.</summary>
         private static string GetLocationTitle(string internalName)
         {
+            if (internalName is IslandGroupKey)
+                return GetTranslation("menu.journal.location.GingerIsland", "Ginger Island");
             return LocationTitles.TryGetValue(internalName, out string? title) ? title : internalName;
+        }
+
+        /// <summary>Get whether an internal location name is one of the Ginger Island areas (excluding the volcano caldera, which keeps its own section).</summary>
+        private static bool IsIslandLocation(string internalName)
+        {
+            return internalName.StartsWith("Island", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Get a fish's catch locations for display, with all Ginger Island areas collapsed into a single "Ginger Island (S, SE, ...)" entry.</summary>
+        public static List<string> GetDisplayLocations(FishEntry fish)
+        {
+            var names = new List<string>();
+            var islandAreas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach ((string displayName, string internalName) in fish.LocationInternalNames)
+            {
+                if (IsIslandLocation(internalName))
+                    islandAreas.Add(internalName);
+                else
+                    names.Add(displayName);
+            }
+            names.Sort(StringComparer.CurrentCultureIgnoreCase);
+
+            if (islandAreas.Count > 0)
+            {
+                var parts = new List<string>(IslandPartOrder
+                    .Where(islandAreas.Contains)
+                    .Select(area => GetTranslation($"menu.journal.island-part.{area}", area.Substring("Island".Length))));
+                parts.AddRange(islandAreas.Where(area => !IslandPartOrder.Contains(area, StringComparer.OrdinalIgnoreCase)).OrderBy(area => area, StringComparer.OrdinalIgnoreCase));
+                string island = GetTranslation("menu.journal.location.GingerIsland", "Ginger Island");
+                names.Add($"{island} ({string.Join(",", parts.Distinct())})");
+            }
+            return names;
         }
 
         /// <summary>Get the short bookmark tab label for a location (via <c>menu.journal.tab.*</c>), falling back to its full title.</summary>

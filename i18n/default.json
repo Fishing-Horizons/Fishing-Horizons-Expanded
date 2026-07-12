@@ -131,14 +131,16 @@
     "menu.journal.tab.Sewer": "Sewers",
     "menu.journal.tab.BugLand": "Bug Lair",
     "menu.journal.tab.WitchSwamp": "Swamp",
-    "menu.journal.tab.IslandSouth": "Island (S)",
-    "menu.journal.tab.IslandSouthEast": "Island (SE)",
-    "menu.journal.tab.IslandSouthEastCave": "Pirate Cove",
-    "menu.journal.tab.IslandSecret": "Secret Spot",
-    "menu.journal.tab.IslandWest": "Island (W)",
-    "menu.journal.tab.IslandNorth": "Island (N)",
     "menu.journal.tab.Caldera": "Volcano",
     "menu.journal.tab.Farm": "Farm",
     "menu.journal.tab.traps": "Traps",
-    "menu.journal.tab.other": "Other"
+    "menu.journal.tab.other": "Other",
+    "menu.journal.location.GingerIsland": "Ginger Island",
+    "menu.journal.tab.GingerIsland": "Island",
+    "menu.journal.island-part.IslandSouth": "S",
+    "menu.journal.island-part.IslandSouthEast": "SE",
+    "menu.journal.island-part.IslandSouthEastCave": "cove",
+    "menu.journal.island-part.IslandSecret": "secret",
+    "menu.journal.island-part.IslandWest": "W",
+    "menu.journal.island-part.IslandNorth": "N"
 }

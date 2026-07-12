@@ -1040,7 +1040,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
             {
                 this.DrawTextFit(b, this.I18n.Get("menu.journal.detail.locations-label"), textX, ry, contentWidth, Game1.textColor);
                 ry += 30;
-                string list = string.Join(", ", fish.Locations.Keys.OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase));
+                string list = string.Join(", ", FishRegistry.GetDisplayLocations(fish));
                 string wrappedList = this.WrapAndClampLines(list, contentWidth, maxLines: 2);
                 b.DrawString(Game1.smallFont, wrappedList, new Vector2(textX, ry), Game1.textColor * 0.9f);
                 ry += (int)Game1.smallFont.MeasureString(wrappedList).Y + 12;
