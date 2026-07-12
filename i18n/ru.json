@@ -131,14 +131,16 @@
     "menu.journal.tab.Sewer": "Канализация",
     "menu.journal.tab.BugLand": "Логово",
     "menu.journal.tab.WitchSwamp": "Болото",
-    "menu.journal.tab.IslandSouth": "Остров (Ю)",
-    "menu.journal.tab.IslandSouthEast": "Остров (ЮВ)",
-    "menu.journal.tab.IslandSouthEastCave": "Бухта",
-    "menu.journal.tab.IslandSecret": "Тайник",
-    "menu.journal.tab.IslandWest": "Остров (З)",
-    "menu.journal.tab.IslandNorth": "Остров (С)",
     "menu.journal.tab.Caldera": "Вулкан",
     "menu.journal.tab.Farm": "Ферма",
     "menu.journal.tab.traps": "Ловушки",
-    "menu.journal.tab.other": "Прочее"
+    "menu.journal.tab.other": "Прочее",
+    "menu.journal.location.GingerIsland": "Остров Джинджер",
+    "menu.journal.tab.GingerIsland": "Остров",
+    "menu.journal.island-part.IslandSouth": "Ю",
+    "menu.journal.island-part.IslandSouthEast": "ЮВ",
+    "menu.journal.island-part.IslandSouthEastCave": "бухта",
+    "menu.journal.island-part.IslandSecret": "тайник",
+    "menu.journal.island-part.IslandWest": "З",
+    "menu.journal.island-part.IslandNorth": "С"
 }
