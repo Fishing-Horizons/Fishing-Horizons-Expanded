@@ -103,5 +103,18 @@
     "menu.journal.pond.produce-title": "Продукція ставу",
     "menu.journal.pond.produce-population": "Від {{count}} риб:",
     "menu.journal.pond.produce-empty": "Цей став нічого не виробляє.",
-    "menu.journal.pond.produce-note": "Став перевіряється щоранку — що більше в ньому риб, то вищий шанс щось знайти."
+    "menu.journal.pond.produce-note": "Став перевіряється щоранку — що більше в ньому риб, то вищий шанс щось знайти.",
+
+    "menu.journal.bookmark.start": "Початок",
+    "menu.journal.bookmark.end": "Кінець",
+    "menu.journal.sort.hover": "Сортування: {{mode}} (натисніть, щоб змінити)",
+    "menu.journal.sort.mods": "Моди",
+    "menu.journal.sort.regions": "Регіони",
+    "menu.journal.region.ocean": "Океан",
+    "menu.journal.region.river": "Річки та місто",
+    "menu.journal.region.mountain": "Гори та ліс",
+    "menu.journal.region.underground": "Підземелля",
+    "menu.journal.region.desert": "Пустеля",
+    "menu.journal.region.island": "Острів Джинджер",
+    "menu.journal.region.other": "Інші води"
 }

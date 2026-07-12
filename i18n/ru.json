@@ -103,5 +103,18 @@
     "menu.journal.pond.produce-title": "Продукция пруда",
     "menu.journal.pond.produce-population": "От {{count}} рыб:",
     "menu.journal.pond.produce-empty": "Этот пруд ничего не производит.",
-    "menu.journal.pond.produce-note": "Пруд проверяется каждое утро — чем больше в нём рыб, тем выше шанс что-то найти."
+    "menu.journal.pond.produce-note": "Пруд проверяется каждое утро — чем больше в нём рыб, тем выше шанс что-то найти.",
+
+    "menu.journal.bookmark.start": "Начало",
+    "menu.journal.bookmark.end": "Конец",
+    "menu.journal.sort.hover": "Сортировка: {{mode}} (нажмите, чтобы сменить)",
+    "menu.journal.sort.mods": "Моды",
+    "menu.journal.sort.regions": "Регионы",
+    "menu.journal.region.ocean": "Океан",
+    "menu.journal.region.river": "Реки и город",
+    "menu.journal.region.mountain": "Горы и лес",
+    "menu.journal.region.underground": "Подземелья",
+    "menu.journal.region.desert": "Пустыня",
+    "menu.journal.region.island": "Остров Джинджер",
+    "menu.journal.region.other": "Прочие воды"
 }

@@ -103,5 +103,18 @@
     "menu.journal.pond.produce-title": "Pond Produce",
     "menu.journal.pond.produce-population": "From {{count}} fish:",
     "menu.journal.pond.produce-empty": "This pond doesn't produce anything.",
-    "menu.journal.pond.produce-note": "The pond is checked every morning — the more fish in it, the better the chance of finding something."
+    "menu.journal.pond.produce-note": "The pond is checked every morning — the more fish in it, the better the chance of finding something.",
+
+    "menu.journal.bookmark.start": "Start",
+    "menu.journal.bookmark.end": "End",
+    "menu.journal.sort.hover": "Sorting: {{mode}} (click to change)",
+    "menu.journal.sort.mods": "Mods",
+    "menu.journal.sort.regions": "Regions",
+    "menu.journal.region.ocean": "Ocean",
+    "menu.journal.region.river": "Rivers & Town",
+    "menu.journal.region.mountain": "Mountains & Forest",
+    "menu.journal.region.underground": "Underground",
+    "menu.journal.region.desert": "Desert",
+    "menu.journal.region.island": "Ginger Island",
+    "menu.journal.region.other": "Other Waters"
 }
