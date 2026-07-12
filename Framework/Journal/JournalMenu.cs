@@ -539,7 +539,7 @@ namespace FishingHorizonsExpanded.Framework.Journal
                 : null;
 
             this.HoverText = this.SortButtonBounds.Contains(x, y)
-                ? this.I18n.Get("menu.journal.sort.hover", new { mode = this.GetSortModeName() })
+                ? this.I18n.Get("menu.journal.sort.hover", new { mode = this.GetSortModeName() }).ToString()
                 : null;
         }
 
