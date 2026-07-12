@@ -45,6 +45,15 @@ namespace FishingHorizonsExpanded.Framework
                 name: () => i18n.Get("config.journal-key.name"),
                 tooltip: () => i18n.Get("config.journal-key.tooltip")
             );
+
+            api.AddSectionTitle(mod.ModManifest, () => i18n.Get("config.section.mines"));
+            api.AddBoolOption(
+                mod.ModManifest,
+                getValue: () => mod.Config.EnableLavaFloorFish,
+                setValue: value => mod.Config.EnableLavaFloorFish = value,
+                name: () => i18n.Get("config.enable-lava-fish.name"),
+                tooltip: () => i18n.Get("config.enable-lava-fish.tooltip")
+            );
         }
     }
 }

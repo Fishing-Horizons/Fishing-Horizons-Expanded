@@ -14,5 +14,12 @@ namespace FishingHorizonsExpanded
 
         /// <summary>The key which opens the journal (once unlocked).</summary>
         public KeybindList JournalKey { get; set; } = new(SButton.J);
+
+
+        /*********
+        ** Mine fishing module
+        *********/
+        /// <summary>Whether custom <c>Data/Locations</c> fish can spawn on the lava mine floors (80–119).</summary>
+        public bool EnableLavaFloorFish { get; set; } = true;
     }
 }
