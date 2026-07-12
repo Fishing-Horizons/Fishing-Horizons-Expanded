@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FishingHorizonsExpanded.Framework;
 using FishingHorizonsExpanded.Framework.Journal;
+using FishingHorizonsExpanded.Framework.Mines;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 
@@ -29,6 +30,7 @@ namespace FishingHorizonsExpanded
 
             // register modules (new mechanics get added here)
             this.Modules.Add(new JournalModule(this));
+            this.Modules.Add(new MineFishingModule(this));
 
             foreach (IModule module in this.Modules)
             {
