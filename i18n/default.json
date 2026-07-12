@@ -139,8 +139,8 @@
     "menu.journal.tab.GingerIsland": "Island",
     "menu.journal.island-part.IslandSouth": "S",
     "menu.journal.island-part.IslandSouthEast": "SE",
-    "menu.journal.island-part.IslandSouthEastCave": "cove",
-    "menu.journal.island-part.IslandSecret": "secret",
+    "menu.journal.island-part.IslandSouthEastCave": "Cove",
+    "menu.journal.island-part.IslandSecret": "Secret",
     "menu.journal.island-part.IslandWest": "W",
     "menu.journal.island-part.IslandNorth": "N"
 }

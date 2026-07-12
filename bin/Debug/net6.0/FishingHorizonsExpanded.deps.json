@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v6.0": {
-      "FishingHorizonsExpanded/0.1.0": {
+      "FishingHorizonsExpanded/1.5.0": {
         "runtime": {
           "FishingHorizonsExpanded.dll": {}
         }
@@ -14,7 +14,7 @@
     }
   },
   "libraries": {
-    "FishingHorizonsExpanded/0.1.0": {
+    "FishingHorizonsExpanded/1.5.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
