@@ -46,6 +46,22 @@ namespace FishingHorizonsExpanded.Framework
                 tooltip: () => i18n.Get("config.journal-key.tooltip")
             );
 
+            api.AddSectionTitle(mod.ModManifest, () => i18n.Get("config.section.assistant"));
+            api.AddBoolOption(
+                mod.ModManifest,
+                getValue: () => mod.Config.EnableFishAssistant,
+                setValue: value => mod.Config.EnableFishAssistant = value,
+                name: () => i18n.Get("config.enable-assistant.name"),
+                tooltip: () => i18n.Get("config.enable-assistant.tooltip")
+            );
+            api.AddKeybindList(
+                mod.ModManifest,
+                getValue: () => mod.Config.AssistantKey,
+                setValue: value => mod.Config.AssistantKey = value,
+                name: () => i18n.Get("config.assistant-key.name"),
+                tooltip: () => i18n.Get("config.assistant-key.tooltip")
+            );
+
             api.AddSectionTitle(mod.ModManifest, () => i18n.Get("config.section.mines"));
             api.AddBoolOption(
                 mod.ModManifest,

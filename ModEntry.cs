@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using FishingHorizonsExpanded.Framework;
+using FishingHorizonsExpanded.Framework.Assistant;
 using FishingHorizonsExpanded.Framework.Journal;
 using FishingHorizonsExpanded.Framework.Mines;
 using StardewModdingAPI;

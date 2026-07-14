@@ -228,6 +228,30 @@ namespace FishingHorizonsExpanded.Framework.Journal
         }
 
 
+        /// <summary>Create a single fish entry from <c>Data/Fish</c>, or null if the ID isn't a journal-worthy fish (trash, algae, unknown item).</summary>
+        /// <param name="id">The unqualified item ID (key in <c>Data/Fish</c>).</param>
+        public static FishEntry? TryCreateEntry(string id)
+        {
+            var fishData = Game1.content.Load<Dictionary<string, string>>("Data\\Fish");
+            if (!fishData.TryGetValue(id, out string? rawData) || rawData is null)
+                return null;
+
+            ParsedItemData data = ItemRegistry.GetData(ItemRegistry.type_object + id);
+            if (data is null || data.IsErrorItem)
+                return null;
+
+            if (NonMinigameIds.Contains(id) || data.Category == StardewValley.Object.junkCategory)
+                return null;
+
+            string[] fields = rawData.Split('/');
+            bool isTrapFish = fields.Length > 1 && fields[1] == "trap";
+
+            var entry = new FishEntry(id, data, isTrapFish);
+            ParseFishFields(entry, fields);
+            return entry;
+        }
+
+
         /*********
         ** Private methods — grouping
         *********/
