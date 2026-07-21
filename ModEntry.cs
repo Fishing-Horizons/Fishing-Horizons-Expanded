@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FishingHorizonsExpanded.Framework;
 using FishingHorizonsExpanded.Framework.Assistant;
+using FishingHorizonsExpanded.Framework.CrabPots;
 using FishingHorizonsExpanded.Framework.Journal;
 using FishingHorizonsExpanded.Framework.Mines;
 using StardewModdingAPI;
@@ -32,6 +33,7 @@ namespace FishingHorizonsExpanded
             // register modules (new mechanics get added here)
             this.Modules.Add(new JournalModule(this));
             this.Modules.Add(new MineFishingModule(this));
+            this.Modules.Add(new CrabPotsModule(this));
 
             foreach (IModule module in this.Modules)
             {

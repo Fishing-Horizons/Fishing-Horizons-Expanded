@@ -31,5 +31,18 @@ namespace FishingHorizonsExpanded
         *********/
         /// <summary>Whether custom <c>Data/Locations</c> fish can spawn on the lava mine floors (80–119).</summary>
         public bool EnableLavaFloorFish { get; set; } = true;
+
+
+        /*********
+        ** Crab pots module
+        *********/
+        /// <summary>Whether trap fish can use a location name (or <c>Ocean</c>) as their water type in <c>Data/Fish</c>, gating them to crab pots in that location.</summary>
+        public bool EnableTrapFishLocationTypes { get; set; } = true;
+
+        /// <summary>Whether crab pots can be placed on water tiles in the mines (persisted across floor regeneration).</summary>
+        public bool EnableCaveCrabPots { get; set; } = true;
+
+        /// <summary>Whether crab pots also work in the lava mine area (80–119). Off by default — planned to be unlocked by the obsidian rod set instead.</summary>
+        public bool EnableLavaCrabPots { get; set; } = false;
     }
 }
