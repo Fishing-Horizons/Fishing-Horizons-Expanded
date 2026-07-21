@@ -146,5 +146,25 @@
     "menu.journal.island-part.IslandSouthEastCave": "Бухта",
     "menu.journal.island-part.IslandSecret": "Схованка",
     "menu.journal.island-part.IslandWest": "Зх",
-    "menu.journal.island-part.IslandNorth": "Пн"
+    "menu.journal.island-part.IslandNorth": "Пн",
+
+// v1.7.0 — «Рибальське чуття»
+    "config.section.assistant": "Рибальське чуття",
+    "config.enable-assistant.name": "Увімкнути «Рибальське чуття»",
+    "config.enable-assistant.tooltip": "Вмикає HUD-панель «Рибальське чуття»: оверлей, що показує, яка риба може клюнути в цій локації просто зараз, пізніше сьогодні або не сьогодні.",
+    "config.assistant-key.name": "Клавіша панелі",
+    "config.assistant-key.tooltip": "Клавіша, що показує та приховує панель «Рибальське чуття».",
+    "hud.assistant.locked": "Щоб чути рибу, потрібен «Щоденник рибалки»...",
+    "hud.assistant.now": "Клює зараз",
+    "hud.assistant.later": "Пізніше сьогодні",
+    "hud.assistant.not-today": "Не сьогодні",
+    "hud.assistant.not-caught": "Ще не спіймана!",
+    "hud.assistant.tip.now": "Може клюнути просто зараз.",
+    "hud.assistant.tip.time": "Клює о: {{windows}}",
+    "hud.assistant.reason.season": "Лише в сезон: {{seasons}}",
+    "hud.assistant.reason.rain": "Лише в дощ",
+    "hud.assistant.reason.sun": "Лише в ясну погоду",
+    "hud.assistant.reason.level": "Потрібен рівень риболовлі {{level}}",
+    "hud.assistant.reason.magic-bait": "Потрібна чарівна наживка",
+    "hud.assistant.reason.special": "Особливі умови..."
 }

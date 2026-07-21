@@ -17,6 +17,16 @@ namespace FishingHorizonsExpanded
 
 
         /*********
+        ** Angler's Sense module
+        *********/
+        /// <summary>Whether the Angler's Sense HUD panel is enabled.</summary>
+        public bool EnableFishAssistant { get; set; } = true;
+
+        /// <summary>The key which toggles the Angler's Sense panel.</summary>
+        public KeybindList AssistantKey { get; set; } = new(SButton.H);
+
+
+        /*********
         ** Mine fishing module
         *********/
         /// <summary>Whether custom <c>Data/Locations</c> fish can spawn on the lava mine floors (80–119).</summary>

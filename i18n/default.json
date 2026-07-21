@@ -146,5 +146,25 @@
     "menu.journal.island-part.IslandSouthEastCave": "Cove",
     "menu.journal.island-part.IslandSecret": "Secret",
     "menu.journal.island-part.IslandWest": "W",
-    "menu.journal.island-part.IslandNorth": "N"
+    "menu.journal.island-part.IslandNorth": "N",
+
+// v1.7.0 — Angler's Sense HUD panel
+    "config.section.assistant": "Angler's Sense",
+    "config.enable-assistant.name": "Enable Angler's Sense",
+    "config.enable-assistant.tooltip": "Whether the Angler's Sense HUD panel is enabled: a toggleable overlay showing which fish can bite at the current location right now, later today, or not today.",
+    "config.assistant-key.name": "Panel Hotkey",
+    "config.assistant-key.tooltip": "The key which shows or hides the Angler's Sense panel.",
+    "hud.assistant.locked": "You need the Fisherman's Journal to sense the fish...",
+    "hud.assistant.now": "Biting now",
+    "hud.assistant.later": "Later today",
+    "hud.assistant.not-today": "Not today",
+    "hud.assistant.not-caught": "Not caught yet!",
+    "hud.assistant.tip.now": "Can bite right now.",
+    "hud.assistant.tip.time": "Bites at: {{windows}}",
+    "hud.assistant.reason.season": "Only in: {{seasons}}",
+    "hud.assistant.reason.rain": "Only when it rains",
+    "hud.assistant.reason.sun": "Only in sunny weather",
+    "hud.assistant.reason.level": "Requires fishing level {{level}}",
+    "hud.assistant.reason.magic-bait": "Requires magic bait",
+    "hud.assistant.reason.special": "Special conditions apply..."
 }

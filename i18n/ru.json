@@ -146,5 +146,25 @@
     "menu.journal.island-part.IslandSouthEastCave": "Бухта",
     "menu.journal.island-part.IslandSecret": "Тайник",
     "menu.journal.island-part.IslandWest": "З",
-    "menu.journal.island-part.IslandNorth": "С"
+    "menu.journal.island-part.IslandNorth": "С",
+
+// v1.7.0 — «Рыбацкое чутьё»
+    "config.section.assistant": "Рыбацкое чутьё",
+    "config.enable-assistant.name": "Включить «Рыбацкое чутьё»",
+    "config.enable-assistant.tooltip": "Включает HUD-панель «Рыбацкое чутьё»: оверлей, показывающий, какая рыба может клюнуть в этой локации прямо сейчас, позже сегодня или не сегодня.",
+    "config.assistant-key.name": "Клавиша панели",
+    "config.assistant-key.tooltip": "Клавиша, показывающая и скрывающая панель «Рыбацкое чутьё».",
+    "hud.assistant.locked": "Чтобы чуять рыбу, нужен «Дневник рыбака»...",
+    "hud.assistant.now": "Клюёт сейчас",
+    "hud.assistant.later": "Позже сегодня",
+    "hud.assistant.not-today": "Не сегодня",
+    "hud.assistant.not-caught": "Ещё не поймана!",
+    "hud.assistant.tip.now": "Может клюнуть прямо сейчас.",
+    "hud.assistant.tip.time": "Клюёт в: {{windows}}",
+    "hud.assistant.reason.season": "Только в сезон: {{seasons}}",
+    "hud.assistant.reason.rain": "Только в дождь",
+    "hud.assistant.reason.sun": "Только в ясную погоду",
+    "hud.assistant.reason.level": "Нужен уровень рыбалки {{level}}",
+    "hud.assistant.reason.magic-bait": "Нужна волшебная наживка",
+    "hud.assistant.reason.special": "Особые условия..."
 }
