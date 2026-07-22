@@ -70,6 +70,29 @@ namespace FishingHorizonsExpanded.Framework
                 name: () => i18n.Get("config.enable-lava-fish.name"),
                 tooltip: () => i18n.Get("config.enable-lava-fish.tooltip")
             );
+
+            api.AddSectionTitle(mod.ModManifest, () => i18n.Get("config.section.crab-pots"));
+            api.AddBoolOption(
+                mod.ModManifest,
+                getValue: () => mod.Config.EnableTrapFishLocationTypes,
+                setValue: value => mod.Config.EnableTrapFishLocationTypes = value,
+                name: () => i18n.Get("config.enable-trap-fish-locations.name"),
+                tooltip: () => i18n.Get("config.enable-trap-fish-locations.tooltip")
+            );
+            api.AddBoolOption(
+                mod.ModManifest,
+                getValue: () => mod.Config.EnableCaveCrabPots,
+                setValue: value => mod.Config.EnableCaveCrabPots = value,
+                name: () => i18n.Get("config.enable-cave-crab-pots.name"),
+                tooltip: () => i18n.Get("config.enable-cave-crab-pots.tooltip")
+            );
+            api.AddBoolOption(
+                mod.ModManifest,
+                getValue: () => mod.Config.EnableLavaCrabPots,
+                setValue: value => mod.Config.EnableLavaCrabPots = value,
+                name: () => i18n.Get("config.enable-lava-crab-pots.name"),
+                tooltip: () => i18n.Get("config.enable-lava-crab-pots.tooltip")
+            );
         }
     }
 }
