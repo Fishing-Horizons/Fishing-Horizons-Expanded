@@ -178,5 +178,12 @@
     "item.golden-rod.description": "A rod with a core of pure gold. Every fish it lands comes up gleaming — always gold quality, no more, no less.",
     "config.section.rods": "Fishing Rods",
     "config.enable-golden-rod.name": "Golden Rod",
-    "config.enable-golden-rod.tooltip": "Whether Willy sells the Golden Rod (requires fishing level 4). All fish caught with it are always exactly gold quality."
+    "config.enable-golden-rod.tooltip": "Whether Willy sells the Golden Rod (requires fishing level 4). All fish caught with it are always exactly gold quality.",
+    "item.double-hook.name": "Double Hook",
+    "item.double-hook.description": "A forked hook that can snag two fish at once. Sometimes a second fish bites mid-catch — land the first without letting the second slip away, and both are yours.",
+    "config.section.tackle": "Tackle",
+    "config.enable-double-hook.name": "Double Hook",
+    "config.enable-double-hook.tooltip": "Whether Willy sells the Double Hook tackle (requires fishing level 6). While equipped, a second fish can bite mid-minigame: keep it hooked until you land the first one to catch both.",
+    "config.double-hook-chance.name": "Double Hook: Bite Chance",
+    "config.double-hook-chance.tooltip": "The chance that a second fish bites during a catch while the Double Hook is equipped."
 }

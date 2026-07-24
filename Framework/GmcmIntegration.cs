@@ -11,6 +11,7 @@ namespace FishingHorizonsExpanded.Framework
         void AddSectionTitle(IManifest mod, Func<string> text, Func<string>? tooltip = null);
         void AddBoolOption(IManifest mod, Func<bool> getValue, Action<bool> setValue, Func<string> name, Func<string>? tooltip = null, string? fieldId = null);
         void AddKeybindList(IManifest mod, Func<KeybindList> getValue, Action<KeybindList> setValue, Func<string> name, Func<string>? tooltip = null, string? fieldId = null);
+        void AddNumberOption(IManifest mod, Func<float> getValue, Action<float> setValue, Func<string> name, Func<string>? tooltip = null, float? min = null, float? max = null, float? interval = null, Func<float, string>? formatValue = null, string? fieldId = null);
     }
 
     /// <summary>Registers the mod config with Generic Mod Config Menu, if it's installed.</summary>
@@ -100,6 +101,26 @@ namespace FishingHorizonsExpanded.Framework
                 setValue: value => mod.Config.EnableGoldenRod = value,
                 name: () => i18n.Get("config.enable-golden-rod.name"),
                 tooltip: () => i18n.Get("config.enable-golden-rod.tooltip")
+            );
+
+            api.AddSectionTitle(mod.ModManifest, () => i18n.Get("config.section.tackle"));
+            api.AddBoolOption(
+                mod.ModManifest,
+                getValue: () => mod.Config.EnableDoubleHook,
+                setValue: value => mod.Config.EnableDoubleHook = value,
+                name: () => i18n.Get("config.enable-double-hook.name"),
+                tooltip: () => i18n.Get("config.enable-double-hook.tooltip")
+            );
+            api.AddNumberOption(
+                mod.ModManifest,
+                getValue: () => mod.Config.DoubleHookChance,
+                setValue: value => mod.Config.DoubleHookChance = value,
+                name: () => i18n.Get("config.double-hook-chance.name"),
+                tooltip: () => i18n.Get("config.double-hook-chance.tooltip"),
+                min: 0f,
+                max: 1f,
+                interval: 0.05f,
+                formatValue: value => $"{Math.Round(value * 100)}%"
             );
         }
     }

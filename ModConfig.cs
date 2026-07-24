@@ -51,5 +51,15 @@ namespace FishingHorizonsExpanded
         *********/
         /// <summary>Whether the golden rod is sold by Willy (always-gold-quality fish, between the fiberglass and iridium rods).</summary>
         public bool EnableGoldenRod { get; set; } = true;
+
+
+        /*********
+        ** Tackle module
+        *********/
+        /// <summary>Whether the double hook tackle is sold by Willy (chance of a second fish biting mid-minigame).</summary>
+        public bool EnableDoubleHook { get; set; } = true;
+
+        /// <summary>The chance (0–1) that a second fish bites during a catch while the double hook is equipped.</summary>
+        public float DoubleHookChance { get; set; } = 0.4f;
     }
 }
