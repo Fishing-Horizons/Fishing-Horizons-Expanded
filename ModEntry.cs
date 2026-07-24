@@ -34,6 +34,7 @@ namespace FishingHorizonsExpanded
             this.Modules.Add(new JournalModule(this));
             this.Modules.Add(new MineFishingModule(this));
             this.Modules.Add(new CrabPotsModule(this));
+            this.Modules.Add(new FishAssistantModule(this));
 
             foreach (IModule module in this.Modules)
             {
