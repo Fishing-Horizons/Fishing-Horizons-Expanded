@@ -1,10 +1,12 @@
 {
-  "Name": "Fishing Horizons: Expanded",
-  "Author": "WayMee, Haku",
-  "Version": "1.8.0",
-  "Description": "New fishing mechanics for Stardew Valley: the Fisherman's Journal and more.",
-  "UniqueID": "waymeeNhaku.FishingHorizonsExpanded",
-  "EntryDll": "FishingHorizonsExpanded.dll",
-  "MinimumApiVersion": "4.0.0",
-	"UpdateKeys": [ "Nexus:33606" ]
+    "Name": "Fishing Horizons: Expanded",
+    "Author": "WayMee, Haku",
+    "Version": "1.9.0",
+    "Description": "New fishing mechanics for Stardew Valley: the Fisherman's Journal and more.",
+    "UniqueID": "waymeeNhaku.FishingHorizonsExpanded",
+    "EntryDll": "FishingHorizonsExpanded.dll",
+    "MinimumApiVersion": "4.0.0",
+    "UpdateKeys": [
+        "Nexus:33606"
+    ]
 }
