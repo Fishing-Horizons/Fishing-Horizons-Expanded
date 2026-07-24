@@ -173,5 +173,10 @@
     "hud.assistant.reason.sun": "Only in sunny weather",
     "hud.assistant.reason.level": "Requires fishing level {{level}}",
     "hud.assistant.reason.magic-bait": "Requires magic bait",
-    "hud.assistant.reason.special": "Special conditions apply..."
+    "hud.assistant.reason.special": "Special conditions apply...",
+    "item.golden-rod.name": "Golden Rod",
+    "item.golden-rod.description": "A rod with a core of pure gold. Every fish it lands comes up gleaming — always gold quality, no more, no less.",
+    "config.section.rods": "Fishing Rods",
+    "config.enable-golden-rod.name": "Golden Rod",
+    "config.enable-golden-rod.tooltip": "Whether Willy sells the Golden Rod (requires fishing level 4). All fish caught with it are always exactly gold quality."
 }

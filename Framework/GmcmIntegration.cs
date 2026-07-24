@@ -93,6 +93,14 @@ namespace FishingHorizonsExpanded.Framework
                 name: () => i18n.Get("config.enable-lava-crab-pots.name"),
                 tooltip: () => i18n.Get("config.enable-lava-crab-pots.tooltip")
             );
+            api.AddSectionTitle(mod.ModManifest, () => i18n.Get("config.section.rods"));
+            api.AddBoolOption(
+                mod.ModManifest,
+                getValue: () => mod.Config.EnableGoldenRod,
+                setValue: value => mod.Config.EnableGoldenRod = value,
+                name: () => i18n.Get("config.enable-golden-rod.name"),
+                tooltip: () => i18n.Get("config.enable-golden-rod.tooltip")
+            );
         }
     }
 }

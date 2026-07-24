@@ -44,5 +44,12 @@ namespace FishingHorizonsExpanded
 
         /// <summary>Whether crab pots also work in the lava mine area (80–119). Off by default — planned to be unlocked by the obsidian rod set instead.</summary>
         public bool EnableLavaCrabPots { get; set; } = false;
+
+
+        /*********
+        ** Rods module
+        *********/
+        /// <summary>Whether the golden rod is sold by Willy (always-gold-quality fish, between the fiberglass and iridium rods).</summary>
+        public bool EnableGoldenRod { get; set; } = true;
     }
 }
