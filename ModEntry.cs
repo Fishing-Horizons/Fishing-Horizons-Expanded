@@ -4,6 +4,7 @@ using FishingHorizonsExpanded.Framework.Assistant;
 using FishingHorizonsExpanded.Framework.CrabPots;
 using FishingHorizonsExpanded.Framework.Journal;
 using FishingHorizonsExpanded.Framework.Mines;
+using FishingHorizonsExpanded.Framework.Rods;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 
@@ -35,6 +36,7 @@ namespace FishingHorizonsExpanded
             this.Modules.Add(new MineFishingModule(this));
             this.Modules.Add(new CrabPotsModule(this));
             this.Modules.Add(new FishAssistantModule(this));
+            this.Modules.Add(new RodsModule(this));
 
             foreach (IModule module in this.Modules)
             {

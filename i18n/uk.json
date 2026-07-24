@@ -173,5 +173,10 @@
     "hud.assistant.reason.sun": "Лише в ясну погоду",
     "hud.assistant.reason.level": "Потрібен рівень риболовлі {{level}}",
     "hud.assistant.reason.magic-bait": "Потрібна чарівна наживка",
-    "hud.assistant.reason.special": "Особливі умови..."
+    "hud.assistant.reason.special": "Особливі умови...",
+    "item.golden-rod.name": "Золота вудка",
+    "item.golden-rod.description": "Вудка з серцевиною з чистого золота. Кожна спіймана нею риба сяє — завжди золота якість, не більше й не менше.",
+    "config.section.rods": "Вудки",
+    "config.enable-golden-rod.name": "Золота вудка",
+    "config.enable-golden-rod.tooltip": "Чи продає Віллі золоту вудку (потрібен 4-й рівень риболовлі). Уся риба, спіймана нею, завжди рівно золотої якості."
 }
