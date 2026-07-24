@@ -173,5 +173,10 @@
     "hud.assistant.reason.sun": "Только в ясную погоду",
     "hud.assistant.reason.level": "Нужен уровень рыбалки {{level}}",
     "hud.assistant.reason.magic-bait": "Нужна волшебная наживка",
-    "hud.assistant.reason.special": "Особые условия..."
+    "hud.assistant.reason.special": "Особые условия...",
+    "item.golden-rod.name": "Золотая удочка",
+    "item.golden-rod.description": "Удочка с сердцевиной из чистого золота. Каждая пойманная ею рыба сияет — всегда золотое качество, не больше и не меньше.",
+    "config.section.rods": "Удочки",
+    "config.enable-golden-rod.name": "Золотая удочка",
+    "config.enable-golden-rod.tooltip": "Продаёт ли Вилли золотую удочку (нужен 4-й уровень рыбалки). Вся рыба, пойманная ею, всегда ровно золотого качества."
 }
