@@ -1,4 +1,6 @@
+using System;
 using FishingHorizonsExpanded.Framework;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -41,6 +43,9 @@ namespace FishingHorizonsExpanded.Framework.Rods
 
         /// <summary>The fishing level required before Willy sells the golden rod (fiberglass is 2, iridium is 6).</summary>
         private const int GoldenRodFishingLevel = 4;
+
+        /// <summary>The gold tint baked into the grayscale casting animation (same idea as the game's per-rod tints, e.g. bamboo's goldenrod).</summary>
+        private static readonly Color GoldTint = new(255, 190, 50);
 
 
         /*********
@@ -113,6 +118,7 @@ namespace FishingHorizonsExpanded.Framework.Rods
             else if (e.NameWithoutLocale.IsEquivalentTo(GoldenRodTextureAssetName))
             {
                 e.LoadFromModFile<Texture2D>("assets/golden-rod.png", AssetLoadPriority.Exclusive);
+                e.Edit(this.AddCastingAnimation, AssetEditPriority.Late);
             }
 
             // Willy's shop entry
@@ -132,6 +138,53 @@ namespace FishingHorizonsExpanded.Framework.Rods
                         Condition = $"PLAYER_FISHING_LEVEL Current {GoldenRodFishingLevel}"
                     });
                 });
+            }
+        }
+
+        /// <summary>Copy the vanilla rod casting/reeling animation into the golden rod's texture, tinted gold.</summary>
+        /// <remarks>
+        /// The in-hand cast/reel animation isn't drawn from the 16×16 item sprite: <c>Game1.drawTool</c> samples
+        /// 48×48 frames from the tool's own texture at the same coordinates as the vanilla <c>TileSheets/tools</c>
+        /// sheet (rows y = 240–384). Those vanilla frames are grayscale, and the game tints them with one color
+        /// from <c>FishingRod.getColor()</c>, hardcoded by upgrade level (bamboo = goldenrod, training = olive,
+        /// fiberglass = white, iridium = violet). Our rod uses UpgradeLevel 2 → tint is white, so we bake the gold
+        /// color in ourselves: extend our texture to the vanilla sheet size, copy the grayscale animation region
+        /// from the player's own game files at runtime, and multiply it by <see cref="GoldTint"/>. The 16×16 icon
+        /// at sprite index 0 stays untouched, so WayMee's art only needs to be the inventory icon.
+        /// </remarks>
+        private void AddCastingAnimation(IAssetData asset)
+        {
+            try
+            {
+                // load through the content pipeline (instead of Game1.toolSpriteSheet) so retexture mods are respected
+                Texture2D vanilla = this.Mod.Helper.GameContent.Load<Texture2D>("TileSheets/tools");
+
+                var editor = asset.AsImage();
+                editor.ExtendImage(Math.Max(editor.Data.Width, vanilla.Width), Math.Max(editor.Data.Height, vanilla.Height));
+
+                // rod animation region of the vanilla sheet: reeling frames (y 240–288) + casting frames (y 288–384)
+                var region = new Rectangle(0, 240, vanilla.Width, Math.Min(vanilla.Height, editor.Data.Height) - 240);
+                var pixels = new Color[region.Width * region.Height];
+                vanilla.GetData(0, region, pixels, 0, pixels.Length);
+
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    Color p = pixels[i];
+                    if (p.A == 0)
+                        continue;
+                    pixels[i] = new Color(
+                        p.R * GoldTint.R / 255,
+                        p.G * GoldTint.G / 255,
+                        p.B * GoldTint.B / 255,
+                        p.A
+                    );
+                }
+
+                editor.Data.SetData(0, region, pixels, 0, pixels.Length);
+            }
+            catch (Exception ex)
+            {
+                this.Mod.Monitor.Log($"Failed building the golden rod casting animation; the rod may be invisible while casting.\n{ex}", LogLevel.Warn);
             }
         }
 
