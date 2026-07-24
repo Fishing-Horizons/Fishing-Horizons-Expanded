@@ -104,7 +104,6 @@ namespace FishingHorizonsExpanded.Framework.Rods
                         MenuSpriteIndex = -1,
                         SalePrice = GoldenRodShopPrice,
                         UpgradeLevel = 2, // same tier behavior as fiberglass: bait slot, no tackle
-                        ApplyUpgradeLevelToDisplayName = false,
                         CanBeLostOnDeath = false
                     };
                 });
