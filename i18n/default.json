@@ -114,12 +114,10 @@
     "menu.journal.pond.produce-population": "From {{count}} fish:",
     "menu.journal.pond.produce-empty": "This pond doesn't produce anything.",
     "menu.journal.pond.produce-note": "The pond is checked every morning — the more fish in it, the better the chance of finding something.",
-
     "menu.journal.bookmark.start": "Start",
     "menu.journal.bookmark.end": "End",
     "menu.journal.sort.hover": "Sorting: {{mode}} (click to change)",
     "menu.journal.sort.mods": "Mods",
-
     "menu.journal.sort.locations": "Locations",
     "menu.journal.section.traps": "Crab Pot Catch",
     "menu.journal.section.other": "Other Waters",
@@ -154,8 +152,6 @@
     "menu.journal.island-part.IslandSecret": "Secret",
     "menu.journal.island-part.IslandWest": "W",
     "menu.journal.island-part.IslandNorth": "N",
-
-// v1.7.0 — Angler's Sense HUD panel
     "config.section.assistant": "Angler's Sense",
     "config.enable-assistant.name": "Enable Angler's Sense",
     "config.enable-assistant.tooltip": "Whether the Angler's Sense HUD panel is enabled: a toggleable overlay showing which fish can bite at the current location right now, later today, or not today.",
@@ -174,16 +170,18 @@
     "hud.assistant.reason.level": "Requires fishing level {{level}}",
     "hud.assistant.reason.magic-bait": "Requires magic bait",
     "hud.assistant.reason.special": "Special conditions apply...",
-    "item.golden-rod.name": "Golden Rod",
-    "item.golden-rod.description": "A rod with a core of pure gold. Every fish it lands comes up gleaming — always gold quality, no more, no less.",
+    "item.feeder-rod.name": "Feeder Rod",
+    "item.feeder-rod.description": "A specialized rod designed for bottom fishing. Its unique rig gives a chance to hook a second fish mid-catch — even without the Double Hook. Add a Double Hook and you might land three at once.",
     "config.section.rods": "Fishing Rods",
-    "config.enable-golden-rod.name": "Golden Rod",
-    "config.enable-golden-rod.tooltip": "Whether Willy sells the Golden Rod (requires fishing level 4). All fish caught with it are always exactly gold quality.",
+    "config.enable-feeder-rod.name": "Feeder Rod",
+    "config.enable-feeder-rod.tooltip": "Whether Willy sells the Feeder Rod (requires fishing level 4). Has an inherent chance to hook a second fish during the minigame.",
     "item.double-hook.name": "Double Hook",
     "item.double-hook.description": "A forked hook that can snag two fish at once. Sometimes a second fish bites mid-catch — land the first without letting the second slip away, and both are yours.",
     "config.section.tackle": "Tackle",
     "config.enable-double-hook.name": "Double Hook",
     "config.enable-double-hook.tooltip": "Whether Willy sells the Double Hook tackle (requires fishing level 6). While equipped, a second fish can bite mid-minigame: keep it hooked until you land the first one to catch both.",
     "config.double-hook-chance.name": "Double Hook: Bite Chance",
-    "config.double-hook-chance.tooltip": "The chance that a second fish bites during a catch while the Double Hook is equipped."
+    "config.double-hook-chance.tooltip": "The chance that a second fish bites during a catch while the Double Hook is equipped.",
+    "config.feeder-rod-chance.name": "Feeder Rod: Second Fish Chance",
+    "config.feeder-rod-chance.tooltip": "The chance that a second fish bites during a catch when using the Feeder Rod (without the Double Hook)."
 }

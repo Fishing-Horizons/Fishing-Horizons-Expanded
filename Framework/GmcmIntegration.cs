@@ -94,13 +94,25 @@ namespace FishingHorizonsExpanded.Framework
                 name: () => i18n.Get("config.enable-lava-crab-pots.name"),
                 tooltip: () => i18n.Get("config.enable-lava-crab-pots.tooltip")
             );
+
             api.AddSectionTitle(mod.ModManifest, () => i18n.Get("config.section.rods"));
             api.AddBoolOption(
                 mod.ModManifest,
-                getValue: () => mod.Config.EnableGoldenRod,
-                setValue: value => mod.Config.EnableGoldenRod = value,
-                name: () => i18n.Get("config.enable-golden-rod.name"),
-                tooltip: () => i18n.Get("config.enable-golden-rod.tooltip")
+                getValue: () => mod.Config.EnableFeederRod,
+                setValue: value => mod.Config.EnableFeederRod = value,
+                name: () => i18n.Get("config.enable-feeder-rod.name"),
+                tooltip: () => i18n.Get("config.enable-feeder-rod.tooltip")
+            );
+            api.AddNumberOption(
+                mod.ModManifest,
+                getValue: () => mod.Config.FeederRodSecondFishChance,
+                setValue: value => mod.Config.FeederRodSecondFishChance = value,
+                name: () => i18n.Get("config.feeder-rod-chance.name"),
+                tooltip: () => i18n.Get("config.feeder-rod-chance.tooltip"),
+                min: 0f,
+                max: 1f,
+                interval: 0.05f,
+                formatValue: value => $"{Math.Round(value * 100)}%"
             );
 
             api.AddSectionTitle(mod.ModManifest, () => i18n.Get("config.section.tackle"));

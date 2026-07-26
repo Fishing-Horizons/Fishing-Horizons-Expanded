@@ -114,12 +114,10 @@
     "menu.journal.pond.produce-population": "Від {{count}} риб:",
     "menu.journal.pond.produce-empty": "Цей став нічого не виробляє.",
     "menu.journal.pond.produce-note": "Став перевіряється щоранку — що більше в ньому риб, то вищий шанс щось знайти.",
-
     "menu.journal.bookmark.start": "Початок",
     "menu.journal.bookmark.end": "Кінець",
     "menu.journal.sort.hover": "Сортування: {{mode}} (натисніть, щоб змінити)",
     "menu.journal.sort.mods": "Моди",
-
     "menu.journal.sort.locations": "Локації",
     "menu.journal.section.traps": "Улов пасток",
     "menu.journal.section.other": "Інші води",
@@ -154,8 +152,6 @@
     "menu.journal.island-part.IslandSecret": "Схованка",
     "menu.journal.island-part.IslandWest": "Зх",
     "menu.journal.island-part.IslandNorth": "Пн",
-
-// v1.7.0 — «Рибальське чуття»
     "config.section.assistant": "Рибальське чуття",
     "config.enable-assistant.name": "Увімкнути «Рибальське чуття»",
     "config.enable-assistant.tooltip": "Вмикає HUD-панель «Рибальське чуття»: оверлей, що показує, яка риба може клюнути в цій локації просто зараз, пізніше сьогодні або не сьогодні.",
@@ -174,16 +170,18 @@
     "hud.assistant.reason.level": "Потрібен рівень риболовлі {{level}}",
     "hud.assistant.reason.magic-bait": "Потрібна чарівна наживка",
     "hud.assistant.reason.special": "Особливі умови...",
-    "item.golden-rod.name": "Золота вудка",
-    "item.golden-rod.description": "Вудка з серцевиною з чистого золота. Кожна спіймана нею риба сяє — завжди золота якість, не більше й не менше.",
+    "item.feeder-rod.name": "Фідерна вудка",
+    "item.feeder-rod.description": "Спеціальна вудка для донної ловлі. Її унікальне оснащення дає шанс підчепити другу рибу прямо під час виважування — навіть без подвійного гачка. З подвійним гачком можна витягти одразу три.",
     "config.section.rods": "Вудки",
-    "config.enable-golden-rod.name": "Золота вудка",
-    "config.enable-golden-rod.tooltip": "Чи продає Віллі золоту вудку (потрібен 4-й рівень риболовлі). Уся риба, спіймана нею, завжди рівно золотої якості.",
+    "config.enable-feeder-rod.name": "Фідерна вудка",
+    "config.enable-feeder-rod.tooltip": "Чи продає Віллі фідерну вудку (потрібен 4-й рівень риболовлі). Має вбудований шанс підчепити другу рибу під час міні-гри.",
     "item.double-hook.name": "Подвійний гачок",
     "item.double-hook.description": "Роздвоєний гачок, здатний підчепити одразу двох риб. Іноді під час виважування клює друга риба — витягни першу, не впустивши другу, і обидві твої.",
     "config.section.tackle": "Снасті",
     "config.enable-double-hook.name": "Подвійний гачок",
     "config.enable-double-hook.tooltip": "Чи продає Віллі подвійний гачок (потрібен 6-й рівень риболовлі). Поки він надітий, під час міні-гри може клюнути друга риба: утримай її до впіймання першої, щоб забрати обох.",
     "config.double-hook-chance.name": "Подвійний гачок: шанс поклювання",
-    "config.double-hook-chance.tooltip": "Шанс, що під час виважування клюне друга риба, поки надітий подвійний гачок."
+    "config.double-hook-chance.tooltip": "Шанс, що під час виважування клюне друга риба, поки надітий подвійний гачок.",
+    "config.feeder-rod-chance.name": "Фідерна вудка: шанс другої риби",
+    "config.feeder-rod-chance.tooltip": "Шанс, що під час виважування клюне друга риба при використанні фідерної вудки (без подвійного гачка)."
 }
