@@ -131,6 +131,9 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /// <summary>Chance that an extra fish is a different species rather than a copy of the first.</summary>
         private const double DifferentSpeciesChance = 0.5;
 
+        /// <summary>How many times to reroll the fish table before settling for a duplicate.</summary>
+        private const int SpeciesRollAttempts = 6;
+
         /// <summary>
         /// Qualified item id of each extra fish when it is a different species, else <c>null</c> for
         /// "same as the first fish", along with its own independently rolled size and quality.
@@ -187,12 +190,14 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /// <summary>Whether the vanilla fish was genuinely inside the bar this tick, ignoring any override.</summary>
         private static bool VanillaFishInBar;
 
+        /// <summary>Whether the first fish was inside the green bar on the previous tick.</summary>
+        private static bool FirstFishWasInBar;
+
         /// <summary>Whether <see cref="AdjustBobberInBar"/> forced <c>bobberInBar</c> from false to true this tick.</summary>
         private static bool ForcedInBar;
 
         /// <summary>The first fish's state as it stood before the current update tick.</summary>
         private static float DistanceBeforeUpdate;
-        private static Vector2 FishShakeBeforeUpdate;
         private static bool PerfectBeforeUpdate;
         private static int FishSizeBeforeUpdate;
         private static int ChallengeBaitBeforeUpdate;
@@ -356,8 +361,13 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             if (treasureInBar && !bar.treasureCaught && bar.bobbers.Contains("(O)693"))
                 return;
 
-            // fishShake is non-zero only if the fish was inside the bar last tick, i.e. it just left.
-            if (!FishShakeBeforeUpdate.Equals(Vector2.Zero))
+            // Vanilla's own sprite shake can't be used to spot the fish leaving the bar here: the
+            // borrowed flag sends it down the in-bar branch, which refreshes the shake every tick, so
+            // the escape would fire on every frame. Our own reading of where the fish really is does
+            // not have that problem.
+            bar.fishShake = Vector2.Zero;
+
+            if (FirstFishWasInBar)
             {
                 Game1.playSound("tinyWhip");
                 bar.perfect = false;
@@ -424,28 +434,35 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (location == null)
                     return;
 
-                Item? candidate = GameLocation.GetFishFromLocationData(
-                    location.Name,
-                    rod.bobber.Value / 64f,
-                    rod.clearWaterDistance,
-                    Game1.player,
-                    isTutorialCatch: false,
-                    isInherited: false,
-                    location);
+                // The table hands back trash and forage as often as fish, so one roll would turn a
+                // 50% chance into a much rarer event. A few attempts keep the odds close to the
+                // advertised half without looping long enough to matter on a single frame.
+                string ownId = ItemRegistry.QualifyItemId(bar.whichFish);
+                for (int attempt = 0; attempt < SpeciesRollAttempts; attempt++)
+                {
+                    Item? candidate = GameLocation.GetFishFromLocationData(
+                        location.Name,
+                        rod.bobber.Value / 64f,
+                        rod.clearWaterDistance,
+                        Game1.player,
+                        isTutorialCatch: false,
+                        isInherited: false,
+                        location);
 
-                // The table can also hand back trash, forage or secret items — only fish qualify.
-                if (candidate is not StardewValley.Object obj || obj.Category != StardewValley.Object.FishCategory)
+                    if (candidate is not StardewValley.Object obj || obj.Category != StardewValley.Object.FishCategory)
+                        continue;
+
+                    // Rolling the fish already on the line just means a plain duplicate.
+                    string qualifiedId = candidate.QualifiedItemId;
+                    if (qualifiedId == ownId)
+                        continue;
+
+                    if (!TryRollSizeAndQuality(bar, rod, qualifiedId, out size, out quality))
+                        continue;
+
+                    fishId = qualifiedId;
                     return;
-
-                // Rolling the same species again is fine, it just means a plain duplicate.
-                string qualifiedId = candidate.QualifiedItemId;
-                if (qualifiedId == ItemRegistry.QualifyItemId(bar.whichFish))
-                    return;
-
-                if (!TryRollSizeAndQuality(bar, rod, qualifiedId, out size, out quality))
-                    return;
-
-                fishId = qualifiedId;
+                }
             }
             catch (Exception ex)
             {
@@ -827,19 +844,36 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (!Armed)
                     return;
 
+                // Carry last tick's reading forward before the update overwrites it.
+                FirstFishWasInBar = VanillaFishInBar;
+                ForcedInBar = false;
+
                 DistanceBeforeUpdate = __instance.distanceFromCatching;
-                FishShakeBeforeUpdate = __instance.fishShake;
                 PerfectBeforeUpdate = __instance.perfect;
                 FishSizeBeforeUpdate = __instance.fishSize;
                 ChallengeBaitBeforeUpdate = __instance.challengeBaitFishes;
 
-                if (!FirstFishSecured || !HasUnresolvedExtras())
+                if (!FirstFishSecured)
                     return;
 
-                // A single tick can only move this by ±0.003, so clamping here keeps it clear of both
-                // ends and vanilla never fires the caught or escaped branch while extras remain.
-                __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
-                __instance.fadeOut = false;
+                if (HasUnresolvedExtras())
+                {
+                    // A single tick can only move this by ±0.003, so clamping here keeps it clear of
+                    // both ends and vanilla never fires the caught or escaped branch while extras remain.
+                    __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
+                    __instance.fadeOut = false;
+                }
+                else if (!__instance.fadeOut)
+                {
+                    // Every fish has been settled, so the minigame has to finish. Simply setting the
+                    // progress to 1 isn't enough: with no fish left in the bar, vanilla drains it a
+                    // little before it checks, so it never quite arrives and the window stays open
+                    // forever. Overshooting lets that drain happen and still leaves vanilla's own clamp
+                    // to land exactly on 1, so vanilla plays its own win — jingle, shake, perfect
+                    // banner and all — instead of us imitating it.
+                    __instance.distanceFromCatching = 2f;
+                    __instance.fishShake = Vector2.Zero;
+                }
             }
             catch (Exception ex)
             {
@@ -899,18 +933,12 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     return;
                 }
 
-                // 3. Keep the minigame alive, or let it end
-                if (FirstFishSecured)
+                // 3. Keep the minigame alive while extras are still in play. Ending it once they are
+                //    all settled is the prefix's job, since only it can act before vanilla's own check.
+                if (FirstFishSecured && HasUnresolvedExtras())
                 {
-                    if (HasUnresolvedExtras())
-                    {
-                        __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
-                        __instance.fadeOut = false;
-                    }
-                    else
-                    {
-                        __instance.distanceFromCatching = 1f;
-                    }
+                    __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
+                    __instance.fadeOut = false;
                 }
 
                 // 4. Update second fish
@@ -923,9 +951,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     bool firstFull = FirstFishSecured || __instance.distanceFromCatching >= 0.99f;
                     bool secondHalf = SecondDistanceFromCatching >= ThirdFishSpawnProgress;
                     if (firstFull && secondHalf)
+                    {
                         SpawnFish(__instance, out ThirdSpawned, out ThirdPosition, out ThirdSpeed, out ThirdTarget, out ThirdDistanceFromCatching);
                         RollExtraSpecies(__instance, out ThirdFishId, out ThirdFishSize, out ThirdFishQuality);
                         ThirdFishIcon = ThirdFishId == null ? null : ItemRegistry.Create(ThirdFishId);
+                    }
                 }
 
                 // 6. Update third fish
@@ -1251,9 +1281,9 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             CachedThreeFishSonar = null;
             SavedBobberPosition = 0f;
             VanillaFishInBar = false;
+            FirstFishWasInBar = false;
             ForcedInBar = false;
             DistanceBeforeUpdate = 0f;
-            FishShakeBeforeUpdate = Vector2.Zero;
             PerfectBeforeUpdate = false;
             FishSizeBeforeUpdate = 0;
             ChallengeBaitBeforeUpdate = 0;
