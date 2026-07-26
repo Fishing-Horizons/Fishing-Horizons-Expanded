@@ -611,7 +611,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             float position, Vector2 shake,
             Texture2D? customTexture, Color fallbackTint)
         {
-            Vector2 drawPos = new(
+            Vector2 drawPos = new Vector2(
                 bar.xPositionOnScreen + 64 + 18,
                 bar.yPositionOnScreen + 12 + 24 + position)
                 + shake + bar.everythingShake;
