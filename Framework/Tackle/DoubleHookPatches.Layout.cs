@@ -19,8 +19,9 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         *********/
         /// <summary>
         /// Route every <c>SpriteBatch.Draw</c> call in <c>BobberBar.draw</c> that uses the
-        /// nine-argument float-scale overload through <see cref="DrawSprite"/>, which swaps in wider
-        /// artwork for the translucent bubble and the wooden frame when extra fish are in play.
+        /// nine-argument float-scale overload through <see cref="DrawSprite"/>, which restyles the
+        /// sonar and, when extra fish are in play, swaps in wider artwork for the translucent bubble
+        /// and the wooden frame.
         /// </summary>
         /// <remarks>
         /// Every call site is redirected rather than a specific one by index, so the patch does not
@@ -104,15 +105,16 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         ** Private methods — sprite substitution
         *********/
         /// <summary>
-        /// Stand-in for vanilla's sprite draw calls in <c>BobberBar.draw</c>. When extra fish are in
-        /// play, swaps the translucent bubble and the wooden frame for their wider variants and moves
-        /// the challenge bait window clear; everything else is forwarded to vanilla unchanged.
+        /// Stand-in for vanilla's sprite draw calls in <c>BobberBar.draw</c>. Always swaps the sonar
+        /// for the mod's own artwork, and when extra fish are in play also widens the translucent
+        /// bubble and the wooden frame and moves the challenge bait window clear; everything else is
+        /// forwarded to vanilla unchanged.
         /// </summary>
         /// <remarks>
-        /// For the swapped artwork only the texture and source rect change — position, origin, scale,
-        /// colour, rotation, flip and depth all stay exactly as vanilla passed them. Because every template has the same
-        /// content height as the sprite it replaces and is anchored on its left edge, the artwork
-        /// simply extends further to the right.
+        /// The bubble and frame keep every argument vanilla passed — only the texture and source rect
+        /// change. Because each template has the same content height as the sprite it replaces and is
+        /// anchored on its left edge, the artwork simply extends further to the right. The sonar and
+        /// the challenge bait window additionally move, so they are not swallowed by that widening.
         /// </remarks>
         internal static void DrawSprite(
             SpriteBatch b, Texture2D texture, Vector2 position, Rectangle? sourceRectangle,
@@ -121,6 +123,24 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             try
             {
                 int extras = Armed ? SpawnedExtraCount() : 0;
+
+                // The sonar is restyled on every cast, so it is handled ahead of the extra-fish
+                // checks: with nothing extra on the line that means the one-slot recolour, drawn
+                // exactly where vanilla puts it.
+                if (texture == Game1.mouseCursors_1_6 && sourceRectangle == VanillaSonarSource)
+                {
+                    Texture2D? sonar = extras == 0
+                        ? CachedOneFishSonar
+                        : extras == 1 ? CachedTwoFishSonar : CachedThreeFishSonar;
+
+                    if (sonar != null)
+                    {
+                        position.X += GetSonarShift(extras, effects);
+                        b.Draw(sonar, position, GetContentBounds(sonar), color, rotation, origin, scale, effects, layerDepth);
+                        return;
+                    }
+                }
+
                 if (extras > 0)
                 {
                     // An unfilled challenge bait slot is the one part of that window drawn straight
@@ -132,23 +152,14 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     }
 
                     Texture2D? swap = null;
-                    bool isSonar = false;
 
                     if (texture == Game1.mouseCursors && sourceRectangle == VanillaBubbleSource)
                         swap = extras == 1 ? CachedTwoFishBubble : CachedThreeFishBubble;
                     else if (texture == Game1.mouseCursors && sourceRectangle == VanillaPanelSource)
                         swap = extras == 1 ? CachedTwoFishFrame : CachedThreeFishFrame;
-                    else if (texture == Game1.mouseCursors_1_6 && sourceRectangle == VanillaSonarSource)
-                    {
-                        swap = extras == 1 ? CachedTwoFishSonar : CachedThreeFishSonar;
-                        isSonar = true;
-                    }
 
                     if (swap != null)
                     {
-                        if (isSonar)
-                            position.X += GetSonarShift(extras, effects);
-
                         b.Draw(swap, position, GetContentBounds(swap), color, rotation, origin, scale, effects, layerDepth);
                         return;
                     }

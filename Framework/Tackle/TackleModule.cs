@@ -150,7 +150,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 e.LoadFromModFile<Texture2D>("assets/3-fish-frame.png", AssetLoadPriority.Exclusive);
             }
 
-            // --- Multi-slot sonar sprites (extra fish) ---
+            // --- Restyled sonar sprites, one per fish count ---
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.OneFishSonarAsset))
+            {
+                e.LoadFromModFile<Texture2D>("assets/1-fish-sonar.png", AssetLoadPriority.Exclusive);
+            }
             else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.TwoFishSonarAsset))
             {
                 e.LoadFromModFile<Texture2D>("assets/2-fish-sonar.png", AssetLoadPriority.Exclusive);

@@ -29,6 +29,18 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (__instance.bossFish || __instance.fromFishPond)
                     return;
 
+                // The sonar is restyled on every cast, with or without the extra-fish tackle, so it
+                // loads ahead of the checks below that bail out on an ordinary rod.
+                try
+                {
+                    CachedOneFishSonar = ContentHelper.Load<Texture2D>(OneFishSonarAsset);
+                }
+                catch (Exception ex)
+                {
+                    Monitor.Log($"Could not load the restyled sonar texture, falling back to vanilla art:\n{ex}", LogLevel.Warn);
+                    CachedOneFishSonar = null;
+                }
+
                 var rod = Game1.player.CurrentTool as FishingRod;
                 bool hasFeederRod = rod?.QualifiedItemId == Rods.RodsModule.FeederRodQualifiedId;
                 bool hasDoubleHook = __instance.bobbers?.Contains(TackleModule.DoubleHookQualifiedId) == true;
