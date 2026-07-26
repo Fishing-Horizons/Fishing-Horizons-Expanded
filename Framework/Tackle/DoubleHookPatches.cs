@@ -128,6 +128,30 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         private static bool FirstFishSecured;
 
         // -- second fish --
+        /// <summary>Chance that an extra fish is a different species rather than a copy of the first.</summary>
+        private const double DifferentSpeciesChance = 0.5;
+
+        /// <summary>How many times to reroll the fish table before settling for a duplicate.</summary>
+        private const int SpeciesRollAttempts = 6;
+
+        /// <summary>
+        /// Qualified item id of each extra fish when it is a different species, else <c>null</c> for
+        /// "same as the first fish", along with its own independently rolled size and quality.
+        /// </summary>
+        private static string? SecondFishId;
+        private static int SecondFishSize;
+        private static int SecondFishQuality;
+        private static string? ThirdFishId;
+        private static int ThirdFishSize;
+        private static int ThirdFishQuality;
+
+        /// <summary>Prebuilt icons for the extra fish, so the sonar shows what is really on the line.</summary>
+        private static Item? SecondFishIcon;
+        private static Item? ThirdFishIcon;
+
+        /// <summary>Different-species fish that are landed and waiting to be handed to the player.</summary>
+        private static readonly List<(string Id, int Size, int Quality)> PendingAwards = new();
+
         private static bool SecondSpawned;
         private static bool SecondLost;
         private static bool SecondSecured;
@@ -166,12 +190,14 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /// <summary>Whether the vanilla fish was genuinely inside the bar this tick, ignoring any override.</summary>
         private static bool VanillaFishInBar;
 
+        /// <summary>Whether the first fish was inside the green bar on the previous tick.</summary>
+        private static bool FirstFishWasInBar;
+
         /// <summary>Whether <see cref="AdjustBobberInBar"/> forced <c>bobberInBar</c> from false to true this tick.</summary>
         private static bool ForcedInBar;
 
         /// <summary>The first fish's state as it stood before the current update tick.</summary>
         private static float DistanceBeforeUpdate;
-        private static Vector2 FishShakeBeforeUpdate;
         private static bool PerfectBeforeUpdate;
         private static int FishSizeBeforeUpdate;
         private static int ChallengeBaitBeforeUpdate;
@@ -335,8 +361,13 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             if (treasureInBar && !bar.treasureCaught && bar.bobbers.Contains("(O)693"))
                 return;
 
-            // fishShake is non-zero only if the fish was inside the bar last tick, i.e. it just left.
-            if (!FishShakeBeforeUpdate.Equals(Vector2.Zero))
+            // Vanilla's own sprite shake can't be used to spot the fish leaving the bar here: the
+            // borrowed flag sends it down the in-bar branch, which refreshes the shake every tick, so
+            // the escape would fire on every frame. Our own reading of where the fish really is does
+            // not have that problem.
+            bar.fishShake = Vector2.Zero;
+
+            if (FirstFishWasInBar)
             {
                 Game1.playSound("tinyWhip");
                 bar.perfect = false;
@@ -378,6 +409,130 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             }
 
             bar.distanceFromCatching = Math.Max(0f, Math.Min(1f, bar.distanceFromCatching));
+        }
+
+
+        /// <summary>
+        /// Decide what an extra fish actually is. Half the time it's another one of whatever is already
+        /// on the line; otherwise the location's fish table is rolled again for a different species,
+        /// which then gets its own size and quality rather than inheriting the first fish's.
+        /// </summary>
+        private static void RollExtraSpecies(BobberBar bar, out string? fishId, out int size, out int quality)
+        {
+            fishId = null;
+            size = 0;
+            quality = 0;
+
+            try
+            {
+                if (Game1.random.NextDouble() >= DifferentSpeciesChance)
+                    return;
+                if (Game1.player?.CurrentTool is not FishingRod rod)
+                    return;
+
+                GameLocation? location = Game1.currentLocation;
+                if (location == null)
+                    return;
+
+                // The table hands back trash and forage as often as fish, so one roll would turn a
+                // 50% chance into a much rarer event. A few attempts keep the odds close to the
+                // advertised half without looping long enough to matter on a single frame.
+                string ownId = ItemRegistry.QualifyItemId(bar.whichFish);
+                for (int attempt = 0; attempt < SpeciesRollAttempts; attempt++)
+                {
+                    Item? candidate = GameLocation.GetFishFromLocationData(
+                        location.Name,
+                        rod.bobber.Value / 64f,
+                        rod.clearWaterDistance,
+                        Game1.player,
+                        isTutorialCatch: false,
+                        isInherited: false,
+                        location);
+
+                    if (candidate is not StardewValley.Object obj || obj.Category != StardewValley.Object.FishCategory)
+                        continue;
+
+                    // Rolling the fish already on the line just means a plain duplicate.
+                    string qualifiedId = candidate.QualifiedItemId;
+                    if (qualifiedId == ownId)
+                        continue;
+
+                    if (!TryRollSizeAndQuality(bar, rod, qualifiedId, out size, out quality))
+                        continue;
+
+                    fishId = qualifiedId;
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log($"Failed rolling an extra fish species, falling back to a duplicate:\n{ex}", LogLevel.Warn);
+                fishId = null;
+            }
+        }
+
+
+        /// <summary>
+        /// Roll a size and quality for a different species from scratch, the way the game would have
+        /// done had this fish been the one on the hook.
+        /// </summary>
+        /// <remarks>
+        /// The size percentage roll is <c>FishingRod.DoFunction</c>'s, and turning that percentage into
+        /// a length and a star rating is <c>BobberBar</c>'s constructor, including the Quality Bobber
+        /// and training rod rules. Both are read from this fish's own <c>Data/Fish</c> bounds.
+        /// </remarks>
+        private static bool TryRollSizeAndQuality(BobberBar bar, FishingRod rod, string qualifiedId, out int size, out int quality)
+        {
+            size = 0;
+            quality = 0;
+
+            string localId = ItemRegistry.GetMetadata(qualifiedId)?.LocalItemId ?? qualifiedId;
+            if (!DataLoader.Fish(Game1.content).TryGetValue(localId, out string? rawData))
+                return false;
+
+            // Crab-pot entries have a different layout and no size range, so they're skipped.
+            string[] fields = rawData.Split('/');
+            if (fields.Length < 5
+                || !int.TryParse(fields[3], out int minFishSize)
+                || !int.TryParse(fields[4], out int maxFishSize))
+                return false;
+
+            float percent = rod.clearWaterDistance / 5f;
+            int minimumSizeContribution = 1 + Game1.player.FishingLevel / 2;
+            percent *= Game1.random.Next(minimumSizeContribution, Math.Max(6, minimumSizeContribution)) / 5f;
+            if (rod.favBait)
+                percent *= 1.2f;
+            percent *= 1f + Game1.random.Next(-10, 11) / 100f;
+            percent = Math.Max(0f, Math.Min(1f, percent));
+
+            size = (int)(minFishSize + (maxFishSize - minFishSize) * percent) + 1;
+            quality = (percent < 0.33f) ? 0 : ((percent < 0.66f) ? 1 : 2);
+
+            for (int i = 0; i < Utility.getStringCountInList(bar.bobbers, "(O)877"); i++)
+            {
+                quality++;
+                if (quality > 2)
+                    quality = 4;
+            }
+
+            if (bar.beginnersRod)
+            {
+                quality = 0;
+                size = minFishSize;
+            }
+
+            return true;
+        }
+
+
+        /// <summary>Hand the player a landed fish that isn't the species the minigame was built around.</summary>
+        private static void AwardExtraFish(string qualifiedId, int size, int quality)
+        {
+            Game1.player.caughtFish(qualifiedId, size, from_fish_pond: false, numberCaught: 1);
+
+            Item fish = ItemRegistry.Create(qualifiedId, 1, quality);
+            if (!Game1.player.addItemToInventoryBool(fish))
+                Game1.createItemDebris(fish, Game1.player.getStandingPosition(), -1);
         }
 
 
@@ -545,7 +700,12 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     location.X += GetSonarShift(extras, flipped ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
 
                     for (int slot = extras; slot > 0; slot--)
-                        fish.drawInMenu(b, location + new Vector2(0f, slot * SonarSlotPitch), scaleSize);
+                    {
+                        // A slot shows its own species when the extra turned out to be a different
+                        // fish, and otherwise repeats the one already on the line.
+                        Item icon = (slot == 1 ? SecondFishIcon : ThirdFishIcon) ?? fish;
+                        icon.drawInMenu(b, location + new Vector2(0f, slot * SonarSlotPitch), scaleSize);
+                    }
                 }
             }
             catch (Exception ex)
@@ -684,19 +844,36 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (!Armed)
                     return;
 
+                // Carry last tick's reading forward before the update overwrites it.
+                FirstFishWasInBar = VanillaFishInBar;
+                ForcedInBar = false;
+
                 DistanceBeforeUpdate = __instance.distanceFromCatching;
-                FishShakeBeforeUpdate = __instance.fishShake;
                 PerfectBeforeUpdate = __instance.perfect;
                 FishSizeBeforeUpdate = __instance.fishSize;
                 ChallengeBaitBeforeUpdate = __instance.challengeBaitFishes;
 
-                if (!FirstFishSecured || !HasUnresolvedExtras())
+                if (!FirstFishSecured)
                     return;
 
-                // A single tick can only move this by ±0.003, so clamping here keeps it clear of both
-                // ends and vanilla never fires the caught or escaped branch while extras remain.
-                __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
-                __instance.fadeOut = false;
+                if (HasUnresolvedExtras())
+                {
+                    // A single tick can only move this by ±0.003, so clamping here keeps it clear of
+                    // both ends and vanilla never fires the caught or escaped branch while extras remain.
+                    __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
+                    __instance.fadeOut = false;
+                }
+                else if (!__instance.fadeOut)
+                {
+                    // Every fish has been settled, so the minigame has to finish. Simply setting the
+                    // progress to 1 isn't enough: with no fish left in the bar, vanilla drains it a
+                    // little before it checks, so it never quite arrives and the window stays open
+                    // forever. Overshooting lets that drain happen and still leaves vanilla's own clamp
+                    // to land exactly on 1, so vanilla plays its own win — jingle, shake, perfect
+                    // banner and all — instead of us imitating it.
+                    __instance.distanceFromCatching = 2f;
+                    __instance.fishShake = Vector2.Zero;
+                }
             }
             catch (Exception ex)
             {
@@ -735,7 +912,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (!SecondSpawned)
                 {
                     if (__instance.distanceFromCatching >= SecondFishSpawnProgress)
+                    {
                         SpawnFish(__instance, out SecondSpawned, out SecondPosition, out SecondSpeed, out SecondTarget, out SecondDistanceFromCatching);
+                        RollExtraSpecies(__instance, out SecondFishId, out SecondFishSize, out SecondFishQuality);
+                        SecondFishIcon = SecondFishId == null ? null : ItemRegistry.Create(SecondFishId);
+                    }
                     return;
                 }
 
@@ -752,18 +933,12 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     return;
                 }
 
-                // 3. Keep the minigame alive, or let it end
-                if (FirstFishSecured)
+                // 3. Keep the minigame alive while extras are still in play. Ending it once they are
+                //    all settled is the prefix's job, since only it can act before vanilla's own check.
+                if (FirstFishSecured && HasUnresolvedExtras())
                 {
-                    if (HasUnresolvedExtras())
-                    {
-                        __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
-                        __instance.fadeOut = false;
-                    }
-                    else
-                    {
-                        __instance.distanceFromCatching = 1f;
-                    }
+                    __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
+                    __instance.fadeOut = false;
                 }
 
                 // 4. Update second fish
@@ -776,7 +951,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     bool firstFull = FirstFishSecured || __instance.distanceFromCatching >= 0.99f;
                     bool secondHalf = SecondDistanceFromCatching >= ThirdFishSpawnProgress;
                     if (firstFull && secondHalf)
+                    {
                         SpawnFish(__instance, out ThirdSpawned, out ThirdPosition, out ThirdSpeed, out ThirdTarget, out ThirdDistanceFromCatching);
+                        RollExtraSpecies(__instance, out ThirdFishId, out ThirdFishSize, out ThirdFishQuality);
+                        ThirdFishIcon = ThirdFishId == null ? null : ItemRegistry.Create(ThirdFishId);
+                    }
                 }
 
                 // 6. Update third fish
@@ -855,8 +1034,12 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             try
             {
                 if (!Armed) return;
-                if (SecondSecured) numCaught += 1;
-                if (ThirdSecured) numCaught += 1;
+
+                // numCaught only ever stacks copies of the species the minigame was built around, so
+                // duplicates ride along with it and anything else is handed over separately.
+                PendingAwards.Clear();
+                CollectExtra(SecondSecured, SecondFishId, SecondFishSize, SecondFishQuality, ref numCaught);
+                CollectExtra(ThirdSecured, ThirdFishId, ThirdFishSize, ThirdFishQuality, ref numCaught);
             }
             catch (Exception ex)
             {
@@ -866,6 +1049,33 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             {
                 Reset();
             }
+
+            foreach ((string id, int size, int quality) in PendingAwards)
+            {
+                try
+                {
+                    AwardExtraFish(id, size, quality);
+                }
+                catch (Exception ex)
+                {
+                    Monitor.Log($"Failed awarding extra fish {id}:\n{ex}", LogLevel.Error);
+                }
+            }
+
+            PendingAwards.Clear();
+        }
+
+
+        /// <summary>Route one landed extra fish either into vanilla's stack or into the pending awards.</summary>
+        private static void CollectExtra(bool secured, string? fishId, int size, int quality, ref int numCaught)
+        {
+            if (!secured)
+                return;
+
+            if (fishId == null)
+                numCaught += 1;
+            else
+                PendingAwards.Add((fishId, size, quality));
         }
 
 
@@ -1035,6 +1245,14 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             CanSpawnThird = false;
             FirstFishSecured = false;
 
+            SecondFishIcon = null;
+            ThirdFishIcon = null;
+            SecondFishId = null;
+            SecondFishSize = 0;
+            SecondFishQuality = 0;
+            ThirdFishId = null;
+            ThirdFishSize = 0;
+            ThirdFishQuality = 0;
             SecondSpawned = false;
             SecondLost = false;
             SecondSecured = false;
@@ -1063,9 +1281,9 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             CachedThreeFishSonar = null;
             SavedBobberPosition = 0f;
             VanillaFishInBar = false;
+            FirstFishWasInBar = false;
             ForcedInBar = false;
             DistanceBeforeUpdate = 0f;
-            FishShakeBeforeUpdate = Vector2.Zero;
             PerfectBeforeUpdate = false;
             FishSizeBeforeUpdate = 0;
             ChallengeBaitBeforeUpdate = 0;

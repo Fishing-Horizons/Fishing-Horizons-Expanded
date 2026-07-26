@@ -111,11 +111,7 @@ namespace FishingHorizonsExpanded.Framework.Rods
                         SpriteIndex = 0,
                         MenuSpriteIndex = -1,
                         SalePrice = FeederRodShopPrice,
-                        UpgradeLevel = 3, // iridium tier: bait + tackle slots
-                        // Bait in slot 0, tackle in the rest. The iridium rod's default of 2 slots
-                        // leaves room for a single tackle; the feeder rod takes a second one, matching
-                        // the advanced iridium rod without inheriting the rest of its tier.
-                        AttachmentSlots = 3,
+                        UpgradeLevel = 3, // iridium tier: one bait slot + one tackle slot
                         CanBeLostOnDeath = false
                     };
                 });
