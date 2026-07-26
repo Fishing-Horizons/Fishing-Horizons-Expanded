@@ -92,6 +92,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         public const string ThreeFishBubbleAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishBubble";
         public const string TwoFishFrameAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/TwoFishFrame";
         public const string ThreeFishFrameAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishFrame";
+        public const string OneFishSonarAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/OneFishSonar";
         public const string TwoFishSonarAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/TwoFishSonar";
         public const string ThreeFishSonarAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishSonar";
 
@@ -157,6 +158,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         private static Texture2D? CachedThreeFishBubble;
         private static Texture2D? CachedTwoFishFrame;
         private static Texture2D? CachedThreeFishFrame;
+        private static Texture2D? CachedOneFishSonar;
         private static Texture2D? CachedTwoFishSonar;
         private static Texture2D? CachedThreeFishSonar;
 
@@ -244,6 +246,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             CachedThreeFishBubble = null;
             CachedTwoFishFrame = null;
             CachedThreeFishFrame = null;
+            CachedOneFishSonar = null;
             CachedTwoFishSonar = null;
             CachedThreeFishSonar = null;
             SavedBobberPosition = 0f;
