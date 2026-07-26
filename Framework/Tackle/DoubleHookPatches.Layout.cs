@@ -42,9 +42,32 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             });
             var drawSonarFish = AccessTools.Method(typeof(DoubleHookPatches), nameof(DrawSonarFish));
 
+            // The challenge bait window goes through Utility.drawWithShadow rather than SpriteBatch.Draw.
+            var withShadow = AccessTools.Method(typeof(Utility), nameof(Utility.drawWithShadow), new[]
+            {
+                typeof(SpriteBatch), typeof(Texture2D), typeof(Vector2), typeof(Rectangle), typeof(Color),
+                typeof(float), typeof(Vector2), typeof(float), typeof(bool), typeof(float),
+                typeof(int), typeof(int), typeof(float)
+            });
+            var withShadowReplacement = AccessTools.Method(typeof(DoubleHookPatches), nameof(DrawChallengeBaitWithShadow));
+
+            if (withShadow == null)
+                Monitor.Log("Could not find Utility.drawWithShadow — the challenge bait window will not move aside for extra fish.", LogLevel.Warn);
+
             int patched = 0;
             foreach (var instruction in instructions)
             {
+                if (withShadow != null && instruction.Calls(withShadow))
+                {
+                    patched++;
+                    yield return new CodeInstruction(OpCodes.Call, withShadowReplacement)
+                    {
+                        labels = instruction.labels,
+                        blocks = instruction.blocks
+                    };
+                    continue;
+                }
+
                 // The sonar's fish icon — the only drawInMenu call in this method.
                 if (drawInMenu != null && instruction.Calls(drawInMenu))
                 {
@@ -82,12 +105,12 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         *********/
         /// <summary>
         /// Stand-in for vanilla's sprite draw calls in <c>BobberBar.draw</c>. When extra fish are in
-        /// play, swaps the translucent bubble and the wooden frame for their wider variants;
-        /// everything else is forwarded to vanilla unchanged.
+        /// play, swaps the translucent bubble and the wooden frame for their wider variants and moves
+        /// the challenge bait window clear; everything else is forwarded to vanilla unchanged.
         /// </summary>
         /// <remarks>
-        /// Only the texture and source rect change — position, origin, scale, colour, rotation, flip
-        /// and depth all stay exactly as vanilla passed them. Because every template has the same
+        /// For the swapped artwork only the texture and source rect change — position, origin, scale,
+        /// colour, rotation, flip and depth all stay exactly as vanilla passed them. Because every template has the same
         /// content height as the sprite it replaces and is anchored on its left edge, the artwork
         /// simply extends further to the right.
         /// </remarks>
@@ -100,6 +123,14 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 int extras = Armed ? SpawnedExtraCount() : 0;
                 if (extras > 0)
                 {
+                    // An unfilled challenge bait slot is the one part of that window drawn straight
+                    // through SpriteBatch; the rest goes through Utility.drawWithShadow.
+                    if (sourceRectangle.HasValue && IsChallengeBaitSprite(texture, sourceRectangle.Value))
+                    {
+                        b.Draw(texture, position + GetChallengeBaitOffset(extras), sourceRectangle, color, rotation, origin, scale, effects, layerDepth);
+                        return;
+                    }
+
                     Texture2D? swap = null;
                     bool isSonar = false;
 
@@ -147,6 +178,64 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 : extras * BarSpacing;
         }
 
+        /// <summary>Whether vanilla has flipped the sonar and challenge bait over to the bar's left.</summary>
+        /// <remarks>Vanilla decides this from the bar's position on screen; we mirror the same test
+        /// rather than tracking it, so the two can never disagree.</remarks>
+        private static bool IsSonarFlipped()
+        {
+            return CurrentBar != null && CurrentBar.xPositionOnScreen > Game1.viewport.Width * 0.75f;
+        }
+
+        /// <summary>Whether a sprite belongs to the challenge bait window.</summary>
+        private static bool IsChallengeBaitSprite(Texture2D texture, Rectangle source)
+        {
+            return texture == Game1.mouseCursors_1_6
+                && (source == VanillaChallengeBaitFrameSource
+                    || source == VanillaChallengeBaitFilledSource
+                    || source == VanillaChallengeBaitEmptySource);
+        }
+
+        /// <summary>How far the challenge bait window has to move to stay clear of the wider bubble
+        /// and the taller sonar.</summary>
+        /// <remarks>
+        /// Vanilla gives this window the same <c>xPosition</c> as the sonar, so it needs the same
+        /// sideways shift. It also tucks it directly underneath the sonar when one is attached
+        /// (<c>yPositionOnScreen + 136</c> instead of <c>+ 40</c>), so in that case it additionally
+        /// drops by one slot pitch per extra fish to clear the taller frame. With no sonar on the rod
+        /// the window sits high with nothing above it and only moves sideways.
+        /// </remarks>
+        private static Vector2 GetChallengeBaitOffset(int extras)
+        {
+            float shift = GetSonarShift(extras, IsSonarFlipped() ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
+            bool hasSonar = CurrentBar?.bobbers?.Contains("(O)SonarBobber") == true;
+
+            return new Vector2(shift, hasSonar ? extras * SonarSlotPitch : 0f);
+        }
+
+        /// <summary>
+        /// Stand-in for vanilla's <c>Utility.drawWithShadow</c> calls in <c>BobberBar.draw</c>,
+        /// which draw the challenge bait window. Moves the whole group; everything else is forwarded
+        /// untouched.
+        /// </summary>
+        internal static void DrawChallengeBaitWithShadow(
+            SpriteBatch b, Texture2D texture, Vector2 position, Rectangle sourceRect, Color color,
+            float rotation, Vector2 origin, float scale, bool flipped, float layerDepth,
+            int horizontalShadowOffset, int verticalShadowOffset, float shadowIntensity)
+        {
+            try
+            {
+                int extras = Armed ? SpawnedExtraCount() : 0;
+                if (extras > 0 && IsChallengeBaitSprite(texture, sourceRect))
+                    position += GetChallengeBaitOffset(extras);
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log($"Failed in {nameof(DrawChallengeBaitWithShadow)}:\n{ex}", LogLevel.Error);
+            }
+
+            Utility.drawWithShadow(b, texture, position, sourceRect, color, rotation, origin, scale, flipped, layerDepth, horizontalShadowOffset, verticalShadowOffset, shadowIntensity);
+        }
+
         /// <summary>
         /// Stand-in for the sonar's <c>fishObject.drawInMenu</c> call: shifts the icon along with the
         /// sonar frame and fills in the extra slots.
@@ -158,12 +247,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 int extras = Armed ? SpawnedExtraCount() : 0;
                 if (extras > 0)
                 {
-                    // The sonar frame is drawn before the icons, so it has already picked its side;
-                    // vanilla decides that from the bar's position, and we mirror the same test.
-                    bool flipped = CurrentBar != null
-                        && CurrentBar.xPositionOnScreen > Game1.viewport.Width * 0.75f;
-
-                    location.X += GetSonarShift(extras, flipped ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
+                    // The sonar frame is drawn before the icons, so it has already picked its side.
+                    location.X += GetSonarShift(extras, IsSonarFlipped() ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
 
                     for (int slot = extras; slot > 0; slot--)
                     {

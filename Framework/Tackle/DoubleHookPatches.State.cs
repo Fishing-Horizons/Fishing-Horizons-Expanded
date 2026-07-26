@@ -75,6 +75,13 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
         private static readonly Rectangle VanillaSonarSource = new Rectangle(227, 6, 29, 24);
 
+        /// <summary>The challenge bait window's frame, and its filled and empty fish slots.</summary>
+        /// <remarks>All three sit on <see cref="Game1.mouseCursors_1_6"/> and are drawn as one group,
+        /// so they move together.</remarks>
+        private static readonly Rectangle VanillaChallengeBaitFrameSource = new Rectangle(240, 31, 15, 38);
+        private static readonly Rectangle VanillaChallengeBaitFilledSource = new Rectangle(236, 205, 19, 19);
+        private static readonly Rectangle VanillaChallengeBaitEmptySource = new Rectangle(217, 205, 19, 19);
+
 
         /*********
         ** Texture asset names
