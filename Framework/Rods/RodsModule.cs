@@ -16,9 +16,10 @@ namespace FishingHorizonsExpanded.Framework.Rods
     ///
     /// Current rods:
     /// <list type="bullet">
-    /// <item><b>Golden Rod</b> — sits between the fiberglass and iridium rods (bait slot, no tackle).
-    /// Its gimmick: every fish it catches is always exactly gold quality — never less, never more.
-    /// Sold by Willy once the player reaches fishing level 4.</item>
+    /// <item><b>Feeder Rod</b> — an advanced rod with both bait and tackle slots (UpgradeLevel 3,
+    /// same tier as iridium). Its gimmick: an inherent chance to hook a second fish during the
+    /// minigame, even without the Double Hook tackle. When the Double Hook IS equipped, a third
+    /// fish can appear. Sold by Willy once the player reaches fishing level 4.</item>
     /// </list>
     /// </remarks>
     internal sealed class RodsModule : IModule
@@ -26,26 +27,26 @@ namespace FishingHorizonsExpanded.Framework.Rods
         /*********
         ** Constants
         *********/
-        /// <summary>The unqualified tool ID of the golden rod.</summary>
-        public const string GoldenRodId = "waymeeNhaku.FHE_GoldenRod";
+        /// <summary>The unqualified tool ID of the feeder rod.</summary>
+        public const string FeederRodId = "waymeeNhaku.FHE_FeederRod";
 
-        /// <summary>The qualified tool ID of the golden rod.</summary>
-        public const string GoldenRodQualifiedId = "(T)" + GoldenRodId;
+        /// <summary>The qualified tool ID of the feeder rod.</summary>
+        public const string FeederRodQualifiedId = "(T)" + FeederRodId;
 
-        /// <summary>The asset name of the golden rod texture.</summary>
-        public const string GoldenRodTextureAssetName = "Mods/waymeeNhaku.FishingHorizonsExpanded/GoldenRod";
+        /// <summary>The asset name of the feeder rod texture.</summary>
+        public const string FeederRodTextureAssetName = "Mods/waymeeNhaku.FishingHorizonsExpanded/FeederRod";
 
         /// <summary>Willy's shop ID in <c>Data/Shops</c>.</summary>
         private const string FishShopId = "FishShop";
 
-        /// <summary>The golden rod's price in Willy's shop (fiberglass is 1 800g, iridium is 7 500g).</summary>
-        private const int GoldenRodShopPrice = 4000;
+        /// <summary>The feeder rod's price in Willy's shop (fiberglass is 1 800g, iridium is 7 500g).</summary>
+        private const int FeederRodShopPrice = 5000;
 
-        /// <summary>The fishing level required before Willy sells the golden rod (fiberglass is 2, iridium is 6).</summary>
-        private const int GoldenRodFishingLevel = 4;
+        /// <summary>The fishing level required before Willy sells the feeder rod (fiberglass is 2, iridium is 6).</summary>
+        private const int FeederRodFishingLevel = 4;
 
-        /// <summary>The gold tint baked into the grayscale casting animation (same idea as the game's per-rod tints, e.g. bamboo's goldenrod).</summary>
-        private static readonly Color GoldTint = new(255, 190, 50);
+        /// <summary>The tint baked into the grayscale casting animation (olive green for a feeder rod look).</summary>
+        private static readonly Color FeederTint = new(80, 140, 60);
 
 
         /*********
@@ -62,7 +63,7 @@ namespace FishingHorizonsExpanded.Framework.Rods
         public string Name => "Rods";
 
         /// <inheritdoc/>
-        public bool IsEnabled => this.Mod.Config.EnableGoldenRod;
+        public bool IsEnabled => this.Mod.Config.EnableFeederRod;
 
 
         /*********
@@ -76,7 +77,9 @@ namespace FishingHorizonsExpanded.Framework.Rods
         /// <inheritdoc/>
         public void Activate(IModHelper helper)
         {
-            RodPatches.Apply(this.Mod.ModManifest.UniqueID, this.Mod.Monitor, () => this.IsEnabled);
+            // The feeder rod's fish-catching mechanic is handled entirely by DoubleHookPatches
+            // (which detects the feeder rod in the constructor postfix). No separate Harmony
+            // patches needed here — only asset injection.
 
             helper.Events.Content.AssetRequested += this.OnAssetRequested;
             helper.Events.Content.LocaleChanged += this.OnLocaleChanged;
@@ -86,7 +89,7 @@ namespace FishingHorizonsExpanded.Framework.Rods
         /*********
         ** Private methods
         *********/
-        /// <summary>Add the golden rod tool, its texture, and Willy's shop entry.</summary>
+        /// <summary>Add the feeder rod tool, its texture, and Willy's shop entry.</summary>
         private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
         {
             if (!this.IsEnabled)
@@ -98,26 +101,26 @@ namespace FishingHorizonsExpanded.Framework.Rods
                 e.Edit(asset =>
                 {
                     var data = asset.AsDictionary<string, ToolData>().Data;
-                    data[GoldenRodId] = new ToolData
+                    data[FeederRodId] = new ToolData
                     {
                         ClassName = "FishingRod",
-                        Name = "GoldenRod",
-                        DisplayName = this.Mod.Helper.Translation.Get("item.golden-rod.name"),
-                        Description = this.Mod.Helper.Translation.Get("item.golden-rod.description"),
-                        Texture = GoldenRodTextureAssetName,
+                        Name = "FeederRod",
+                        DisplayName = this.Mod.Helper.Translation.Get("item.feeder-rod.name"),
+                        Description = this.Mod.Helper.Translation.Get("item.feeder-rod.description"),
+                        Texture = FeederRodTextureAssetName,
                         SpriteIndex = 0,
                         MenuSpriteIndex = -1,
-                        SalePrice = GoldenRodShopPrice,
-                        UpgradeLevel = 2, // same tier behavior as fiberglass: bait slot, no tackle
+                        SalePrice = FeederRodShopPrice,
+                        UpgradeLevel = 3, // iridium tier: bait + tackle slots
                         CanBeLostOnDeath = false
                     };
                 });
             }
 
             // tool texture
-            else if (e.NameWithoutLocale.IsEquivalentTo(GoldenRodTextureAssetName))
+            else if (e.NameWithoutLocale.IsEquivalentTo(FeederRodTextureAssetName))
             {
-                e.LoadFromModFile<Texture2D>("assets/golden-rod.png", AssetLoadPriority.Exclusive);
+                e.LoadFromModFile<Texture2D>("assets/feeder-rod.png", AssetLoadPriority.Exclusive);
                 e.Edit(this.AddCastingAnimation, AssetEditPriority.Late);
             }
 
@@ -132,38 +135,39 @@ namespace FishingHorizonsExpanded.Framework.Rods
 
                     shop.Items.Add(new ShopItemData
                     {
-                        Id = GoldenRodId,
-                        ItemId = GoldenRodQualifiedId,
-                        Price = GoldenRodShopPrice,
-                        Condition = $"PLAYER_FISHING_LEVEL Current {GoldenRodFishingLevel}"
+                        Id = FeederRodId,
+                        ItemId = FeederRodQualifiedId,
+                        Price = FeederRodShopPrice,
+                        Condition = $"PLAYER_FISHING_LEVEL Current {FeederRodFishingLevel}"
                     });
                 });
             }
         }
 
-        /// <summary>Copy the vanilla rod casting/reeling animation into the golden rod's texture, tinted gold.</summary>
+        /// <summary>Copy the vanilla rod casting/reeling animation into the feeder rod's texture, tinted.</summary>
         /// <remarks>
         /// The in-hand cast/reel animation isn't drawn from the 16×16 item sprite: <c>Game1.drawTool</c> samples
         /// 48×48 frames from the tool's own texture at the same coordinates as the vanilla <c>TileSheets/tools</c>
         /// sheet (rows y = 240–384). Those vanilla frames are grayscale, and the game tints them with one color
-        /// from <c>FishingRod.getColor()</c>, hardcoded by upgrade level (bamboo = goldenrod, training = olive,
-        /// fiberglass = white, iridium = violet). Our rod uses UpgradeLevel 2 → tint is white, so we bake the gold
-        /// color in ourselves: extend our texture to the vanilla sheet size, copy the grayscale animation region
-        /// from the player's own game files at runtime, and multiply it by <see cref="GoldTint"/>. The 16×16 icon
-        /// at sprite index 0 stays untouched, so WayMee's art only needs to be the inventory icon.
+        /// from <c>FishingRod.getColor()</c>, hardcoded by upgrade level. Our rod uses UpgradeLevel 3 → tint is
+        /// violet (same as iridium rod), so we bake our own olive green tint ourselves: extend our texture to the
+        /// vanilla sheet size, copy the grayscale animation region from the player's own game files at runtime,
+        /// and multiply it by <see cref="FeederTint"/>. The 16×16 icon at sprite index 0 stays untouched,
+        /// so WayMee's art only needs to be the inventory icon.
         /// </remarks>
         private void AddCastingAnimation(IAssetData asset)
         {
             try
             {
-                // load through the content pipeline (instead of Game1.toolSpriteSheet) so retexture mods are respected
                 Texture2D vanilla = this.Mod.Helper.GameContent.Load<Texture2D>("TileSheets/tools");
 
                 var editor = asset.AsImage();
-                editor.ExtendImage(Math.Max(editor.Data.Width, vanilla.Width), Math.Max(editor.Data.Height, vanilla.Height));
+                editor.ExtendImage(
+                    Math.Max(editor.Data.Width, vanilla.Width),
+                    Math.Max(editor.Data.Height, vanilla.Height));
 
-                // rod animation region of the vanilla sheet: reeling frames (y 240–288) + casting frames (y 288–384)
-                var region = new Rectangle(0, 240, vanilla.Width, Math.Min(vanilla.Height, editor.Data.Height) - 240);
+                var region = new Rectangle(0, 240, vanilla.Width,
+                    Math.Min(vanilla.Height, editor.Data.Height) - 240);
                 var pixels = new Color[region.Width * region.Height];
                 vanilla.GetData(0, region, pixels, 0, pixels.Length);
 
@@ -173,9 +177,9 @@ namespace FishingHorizonsExpanded.Framework.Rods
                     if (p.A == 0)
                         continue;
                     pixels[i] = new Color(
-                        p.R * GoldTint.R / 255,
-                        p.G * GoldTint.G / 255,
-                        p.B * GoldTint.B / 255,
+                        p.R * FeederTint.R / 255,
+                        p.G * FeederTint.G / 255,
+                        p.B * FeederTint.B / 255,
                         p.A
                     );
                 }
@@ -184,7 +188,9 @@ namespace FishingHorizonsExpanded.Framework.Rods
             }
             catch (Exception ex)
             {
-                this.Mod.Monitor.Log($"Failed building the golden rod casting animation; the rod may be invisible while casting.\n{ex}", LogLevel.Warn);
+                this.Mod.Monitor.Log(
+                    $"Failed building the feeder rod casting animation; the rod may be invisible while casting.\n{ex}",
+                    LogLevel.Warn);
             }
         }
 

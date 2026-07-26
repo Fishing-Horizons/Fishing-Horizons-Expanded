@@ -11,12 +11,13 @@ namespace FishingHorizonsExpanded.Framework.Tackle
     /// Current tackle:
     /// <list type="bullet">
     /// <item><b>Double Hook</b> — while equipped, there's a chance that a second fish bites mid-minigame
-    /// (once the catch bar is half full). The player must land the first fish while also keeping the
-    /// second one hooked; if they manage both, they get two fish. See <see cref="DoubleHookPatches"/>.</item>
+    /// (once the catch bar is half full). On any rod it gives a second-fish chance; on the Feeder Rod
+    /// it enables a <em>third</em> fish (the Feeder Rod's own mechanic covers the second).
+    /// See <see cref="DoubleHookPatches"/>.</item>
     /// </list>
     /// Tackle items are plain <c>Data/Objects</c> entries with category -22, so the vanilla iridium rod
-    /// can equip them and the standard tackle durability applies. Uninstall-safe: removing the mod turns
-    /// the item into an error item but never corrupts the save.
+    /// (and our Feeder Rod) can equip them and the standard tackle durability applies. Uninstall-safe:
+    /// removing the mod turns the item into an error item but never corrupts the save.
     /// </remarks>
     internal sealed class TackleModule : IModule
     {
@@ -70,7 +71,14 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /// <inheritdoc/>
         public void Activate(IModHelper helper)
         {
-            DoubleHookPatches.Apply(this.Mod.ModManifest.UniqueID, this.Mod.Monitor, () => this.IsEnabled, () => this.Mod.Config.DoubleHookChance);
+            DoubleHookPatches.Apply(
+                this.Mod.ModManifest.UniqueID,
+                this.Mod.Monitor,
+                () => this.IsEnabled || this.Mod.Config.EnableFeederRod, // active if either mechanic is on
+                () => this.Mod.Config.DoubleHookChance,
+                () => this.Mod.Config.FeederRodSecondFishChance,
+                helper.GameContent
+            );
 
             helper.Events.Content.AssetRequested += this.OnAssetRequested;
             helper.Events.Content.LocaleChanged += this.OnLocaleChanged;
@@ -80,14 +88,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /*********
         ** Private methods
         *********/
-        /// <summary>Add the double hook object, its texture, and Willy's shop entry.</summary>
+        /// <summary>Add the double hook object, its texture, extra fish textures, and Willy's shop entry.</summary>
         private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
         {
-            if (!this.IsEnabled)
-                return;
-
-            // object definition
-            if (e.NameWithoutLocale.IsEquivalentTo("Data/Objects"))
+            // --- Double Hook object ---
+            if (this.IsEnabled && e.NameWithoutLocale.IsEquivalentTo("Data/Objects"))
             {
                 e.Edit(asset =>
                 {
@@ -98,7 +103,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                         DisplayName = this.Mod.Helper.Translation.Get("item.double-hook.name"),
                         Description = this.Mod.Helper.Translation.Get("item.double-hook.description"),
                         Type = "interactive",
-                        Category = -22, // tackle: equippable on rods with a tackle slot, standard durability
+                        Category = -22, // tackle
                         Price = DoubleHookShopPrice / 2,
                         Texture = DoubleHookTextureAssetName,
                         SpriteIndex = 0,
@@ -107,14 +112,26 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 });
             }
 
-            // object texture
-            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookTextureAssetName))
+            // --- Double Hook texture ---
+            else if (this.IsEnabled && e.NameWithoutLocale.IsEquivalentTo(DoubleHookTextureAssetName))
             {
                 e.LoadFromModFile<Texture2D>("assets/double-hook.png", AssetLoadPriority.Exclusive);
             }
 
-            // Willy's shop entry
-            else if (e.NameWithoutLocale.IsEquivalentTo("Data/Shops"))
+            // --- Second fish placeholder texture ---
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.SecondFishTextureAsset))
+            {
+                e.LoadFromModFile<Texture2D>("assets/second-fish.png", AssetLoadPriority.Exclusive);
+            }
+
+            // --- Third fish placeholder texture ---
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.ThirdFishTextureAsset))
+            {
+                e.LoadFromModFile<Texture2D>("assets/third-fish.png", AssetLoadPriority.Exclusive);
+            }
+
+            // --- Willy's shop entry ---
+            else if (this.IsEnabled && e.NameWithoutLocale.IsEquivalentTo("Data/Shops"))
             {
                 e.Edit(asset =>
                 {

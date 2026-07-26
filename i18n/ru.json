@@ -114,12 +114,10 @@
     "menu.journal.pond.produce-population": "От {{count}} рыб:",
     "menu.journal.pond.produce-empty": "Этот пруд ничего не производит.",
     "menu.journal.pond.produce-note": "Пруд проверяется каждое утро — чем больше в нём рыб, тем выше шанс что-то найти.",
-
     "menu.journal.bookmark.start": "Начало",
     "menu.journal.bookmark.end": "Конец",
     "menu.journal.sort.hover": "Сортировка: {{mode}} (нажмите, чтобы сменить)",
     "menu.journal.sort.mods": "Моды",
-
     "menu.journal.sort.locations": "Локации",
     "menu.journal.section.traps": "Улов ловушек",
     "menu.journal.section.other": "Прочие воды",
@@ -154,8 +152,6 @@
     "menu.journal.island-part.IslandSecret": "Тайник",
     "menu.journal.island-part.IslandWest": "З",
     "menu.journal.island-part.IslandNorth": "С",
-
-// v1.7.0 — «Рыбацкое чутьё»
     "config.section.assistant": "Рыбацкое чутьё",
     "config.enable-assistant.name": "Включить «Рыбацкое чутьё»",
     "config.enable-assistant.tooltip": "Включает HUD-панель «Рыбацкое чутьё»: оверлей, показывающий, какая рыба может клюнуть в этой локации прямо сейчас, позже сегодня или не сегодня.",
@@ -174,16 +170,18 @@
     "hud.assistant.reason.level": "Нужен уровень рыбалки {{level}}",
     "hud.assistant.reason.magic-bait": "Нужна волшебная наживка",
     "hud.assistant.reason.special": "Особые условия...",
-    "item.golden-rod.name": "Золотая удочка",
-    "item.golden-rod.description": "Удочка с сердцевиной из чистого золота. Каждая пойманная ею рыба сияет — всегда золотое качество, не больше и не меньше.",
+    "item.feeder-rod.name": "Фидерная удочка",
+    "item.feeder-rod.description": "Специальная удочка для донной ловли. Её уникальная оснастка даёт шанс подцепить вторую рыбу прямо во время вываживания — даже без двойного крючка. С двойным крючком можно вытащить сразу три.",
     "config.section.rods": "Удочки",
-    "config.enable-golden-rod.name": "Золотая удочка",
-    "config.enable-golden-rod.tooltip": "Продаёт ли Вилли золотую удочку (нужен 4-й уровень рыбалки). Вся рыба, пойманная ею, всегда ровно золотого качества.",
+    "config.enable-feeder-rod.name": "Фидерная удочка",
+    "config.enable-feeder-rod.tooltip": "Продаёт ли Вилли фидерную удочку (нужен 4-й уровень рыбалки). Имеет встроенный шанс подцепить вторую рыбу во время мини-игры.",
     "item.double-hook.name": "Двойной крючок",
     "item.double-hook.description": "Раздвоенный крючок, способный подцепить сразу двух рыб. Иногда во время вываживания клюёт вторая рыба — вытащи первую, не упустив вторую, и обе твои.",
     "config.section.tackle": "Снасти",
     "config.enable-double-hook.name": "Двойной крючок",
     "config.enable-double-hook.tooltip": "Продаёт ли Вилли двойной крючок (нужен 6-й уровень рыбалки). Пока он надет, во время мини-игры может клюнуть вторая рыба: удержи её до поимки первой, чтобы забрать обеих.",
     "config.double-hook-chance.name": "Двойной крючок: шанс поклёвки",
-    "config.double-hook-chance.tooltip": "Шанс, что во время вываживания клюнет вторая рыба, пока надет двойной крючок."
+    "config.double-hook-chance.tooltip": "Шанс, что во время вываживания клюнет вторая рыба, пока надет двойной крючок.",
+    "config.feeder-rod-chance.name": "Фидерная удочка: шанс второй рыбы",
+    "config.feeder-rod-chance.tooltip": "Шанс, что во время вываживания клюнет вторая рыба при использовании фидерной удочки (без двойного крючка)."
 }
