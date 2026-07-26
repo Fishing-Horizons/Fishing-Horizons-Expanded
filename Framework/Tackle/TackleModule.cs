@@ -130,12 +130,12 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 e.LoadFromModFile<Texture2D>("assets/third-fish.png", AssetLoadPriority.Exclusive);
             }
 
-            // --- Backwindow panel extensions ---
-            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.TwoFishBackwindowAsset))
+            // --- Widened translucent bubble sprites (extra fish) ---
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.TwoFishBubbleAsset))
             {
                 e.LoadFromModFile<Texture2D>("assets/2-fish-backwindow-bp.png", AssetLoadPriority.Exclusive);
             }
-            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.ThreeFishBackwindowAsset))
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.ThreeFishBubbleAsset))
             {
                 e.LoadFromModFile<Texture2D>("assets/3-fish-backwindow-bp.png", AssetLoadPriority.Exclusive);
             }
