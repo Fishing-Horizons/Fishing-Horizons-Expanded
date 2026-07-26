@@ -1,11 +1,12 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection.Emit;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Menus;
-
 using StardewValley.Tools;
 
 namespace FishingHorizonsExpanded.Framework.Tackle
@@ -15,18 +16,28 @@ namespace FishingHorizonsExpanded.Framework.Tackle
     /// Supports up to three fish in a single catch:
     /// <list type="bullet">
     /// <item><b>Second fish</b> — triggered by the <em>Feeder Rod</em> (inherent chance, no tackle needed)
-    /// or by the <em>Double Hook</em> tackle on any rod. Spawns once the first catch bar reaches 50%.
-    /// Gets its own full-size progress bar to the right of the vanilla one.</item>
-    /// <item><b>Third fish</b> — only possible with the <em>Feeder Rod + Double Hook</em> combo.
-    /// Spawns when the second fish's bar reaches 50% AND the first fish is fully caught.
-    /// Gets its own progress bar further to the right.</item>
+    /// or by the <em>Double Hook</em> tackle on any rod. Spawns once the first catch bar reaches 50%.</item>
+    /// <item><b>Third fish</b> — only with the <em>Feeder Rod + Double Hook</em> combo. Spawns when the
+    /// second fish's bar reaches 50% AND the first fish is fully caught.</item>
     /// </list>
     ///
-    /// Rendering uses custom backwindow sprites (<c>2-fish-backwindow-bp.png</c> and
-    /// <c>3-fish-backwindow-bp.png</c>) to seamlessly extend the vanilla BobberBar panel
-    /// to the right. The panel grows gradually — the 2-fish backwindow appears when the
-    /// second fish spawns, then switches to the 3-fish backwindow when the third spawns.
-    /// Progress bars use <see cref="Utility.getRedToGreenLerpColor"/> fill, matching vanilla.
+    /// <para><b>Rendering</b> — matches vanilla exactly. Vanilla's <c>BobberBar.draw</c> renders the
+    /// catch progress bar as a plain <see cref="Game1.staminaRect"/> rectangle:</para>
+    /// <code>
+    /// b.Draw(Game1.staminaRect,
+    ///     new Rectangle(xPositionOnScreen + 124,
+    ///                   yPositionOnScreen + 4 + (int)(580f * (1f - distanceFromCatching)),
+    ///                   16, (int)(580f * distanceFromCatching)),
+    ///     Utility.getRedToGreenLerpColor(distanceFromCatching));
+    /// </code>
+    /// <para>Each extra fish gets an identical bar shifted right by <see cref="BarSpacing"/> px.</para>
+    ///
+    /// <para>The translucent bubble behind the minigame is vanilla's first draw call —
+    /// <c>mouseCursors</c> source <c>(652, 1685, 52, 157)</c> at <c>Color.White * 0.6f * scale</c>.
+    /// A transpiler swaps that one call for the mod's wider bubble sprites, which are the same
+    /// artwork widened by exactly <see cref="BubbleWidenPerBar"/> source px per extra bar. Because the
+    /// source rect is the only thing that changes, position/origin/scale/alpha/flip all stay vanilla,
+    /// and the bubble keeps its exact 48px margin to the right of the last bar.</para>
     ///
     /// State is static because the bobber bar minigame only ever runs for the local player.
     /// All patches swallow their own exceptions, so a failure can never crash the game.
@@ -50,51 +61,40 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
 
         /*********
-        ** Backwindow panel layout
+        ** Vanilla draw geometry (from BobberBar.draw)
         *********/
-        // The vanilla BobberBar draws its background from Game1.mouseCursors at
-        // source (644, 1999, 38, 150), scale 4×, position (xPositionOnScreen + 64, yPositionOnScreen).
-        // Our backwindow templates extend this panel to the right.
-        //
-        // Template alignment: template col 3 = vanilla panel col 0 (left border).
-        // Template cols 0–2 are transparent padding. The interior starts at col ~6.
-        //
-        // Extension drawing: we draw the right portion of the template (starting from
-        // col 38, which overlaps the last 3 vanilla panel cols to cover the right border),
-        // seamlessly extending the panel with new bar column area.
+        /// <summary>X offset of the vanilla catch bar from xPositionOnScreen.</summary>
+        private const int VanillaBarX = 124;
 
-        /// <summary>Vanilla panel x-offset from xPositionOnScreen.</summary>
-        private const int VanillaPanelDrawX = 64;
+        /// <summary>Y offset of the vanilla catch bar from yPositionOnScreen.</summary>
+        private const int VanillaBarY = 4;
 
-        /// <summary>Vanilla panel source width in pixels (38 cols at source scale).</summary>
-        private const int VanillaPanelSourceW = 38;
+        /// <summary>Width of the vanilla catch bar in pixels.</summary>
+        private const int BarWidth = 16;
 
-        /// <summary>Column offset: template col 3 = vanilla col 0.</summary>
-        private const int TemplateColOffset = 3;
+        /// <summary>Full height of the vanilla catch bar in pixels.</summary>
+        private const int BarHeight = 580;
 
-        /// <summary>How many vanilla cols we overlap to cover the right border seam.</summary>
-        private const int ExtOverlapCols = 3;
+        /// <summary>
+        /// Horizontal step between catch bars. 24px = 6 source px at 4× scale, which is exactly how
+        /// much wider each bubble template is per extra bar — so the bubble's right margin stays at
+        /// the vanilla 48px no matter how many bars are showing.
+        /// </summary>
+        private const int BarSpacing = 24;
 
-        /// <summary>Source column where we start drawing the extension (= TemplateColOffset + VanillaPanelSourceW - ExtOverlapCols).</summary>
-        private const int ExtSrcStartCol = TemplateColOffset + VanillaPanelSourceW - ExtOverlapCols; // 38
+        /// <summary>Source px the bubble sprite widens per extra bar (<see cref="BarSpacing"/> / 4).</summary>
+        private const int BubbleWidenPerBar = BarSpacing / 4;
 
-        /// <summary>Width of each extra bar slot in source pixels (from 3-fish-example analysis).</summary>
-        private const int BarSlotSourceW = 7;
+        /// <summary>Vanilla bubble source rect in <c>Game1.mouseCursors</c>.</summary>
+        private static readonly Rectangle VanillaBubbleSource = new Rectangle(652, 1685, 52, 157);
 
-        /// <summary>Width of each extra bar slot at 4× scale.</summary>
-        private const int BarSlotPx = BarSlotSourceW * 4; // 28
-
-        /// <summary>Progress fill width (4 source cols × 4 = 16px, matches vanilla catch bar).</summary>
-        private const int BarFillWidth = 16;
-
-        /// <summary>Horizontal inset of fill from the left edge of a bar slot (centers 16px in 28px).</summary>
-        private const int BarFillInset = (BarSlotPx - BarFillWidth) / 2; // 6
-
-        /// <summary>Progress fill height in pixels.</summary>
-        private const int BarFillHeight = 568;
-
-        /// <summary>Progress fill y-offset from yPositionOnScreen.</summary>
-        private const int BarFillYOffset = 16;
+        /// <summary>
+        /// Content bounds inside the mod's bubble templates. Both templates place the artwork at
+        /// (3, 2) and are exactly 157px tall — identical to the vanilla sprite — so passing this as
+        /// the source rect makes them drop-in replacements that only extend to the right.
+        /// </summary>
+        private static readonly Rectangle TwoFishBubbleSource = new Rectangle(3, 2, 52 + BubbleWidenPerBar, 157);
+        private static readonly Rectangle ThreeFishBubbleSource = new Rectangle(3, 2, 52 + BubbleWidenPerBar * 2, 157);
 
 
         /*********
@@ -102,8 +102,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         *********/
         public const string SecondFishTextureAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/SecondFish";
         public const string ThirdFishTextureAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThirdFish";
-        public const string TwoFishBackwindowAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/TwoFishBackwindow";
-        public const string ThreeFishBackwindowAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishBackwindow";
+        public const string TwoFishBubbleAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/TwoFishBubble";
+        public const string ThreeFishBubbleAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishBubble";
 
 
         /*********
@@ -119,7 +119,6 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /*********
         ** Fields — per-minigame state
         *********/
-        // -- arming --
         private static bool Armed;
         private static bool CanSpawnThird;
         private static bool FirstFishSecured;
@@ -147,8 +146,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         // -- cached textures --
         private static Texture2D? CachedSecondFishTexture;
         private static Texture2D? CachedThirdFishTexture;
-        private static Texture2D? CachedTwoFishBg;
-        private static Texture2D? CachedThreeFishBg;
+        private static Texture2D? CachedTwoFishBubble;
+        private static Texture2D? CachedThreeFishBubble;
 
         // -- temporary draw state --
         private static float SavedBobberPosition;
@@ -186,12 +185,101 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             harmony.Patch(
                 original: AccessTools.Method(typeof(BobberBar), nameof(BobberBar.draw), new[] { typeof(SpriteBatch) }),
                 prefix: new HarmonyMethod(typeof(DoubleHookPatches), nameof(BeforeDraw)),
-                postfix: new HarmonyMethod(typeof(DoubleHookPatches), nameof(AfterDraw))
+                postfix: new HarmonyMethod(typeof(DoubleHookPatches), nameof(AfterDraw)),
+                transpiler: new HarmonyMethod(typeof(DoubleHookPatches), nameof(TranspileDraw))
             );
             harmony.Patch(
                 original: AccessTools.Method(typeof(FishingRod), nameof(FishingRod.pullFishFromWater)),
                 prefix: new HarmonyMethod(typeof(DoubleHookPatches), nameof(BeforePullFishFromWater))
             );
+        }
+
+
+        /*********
+        ** Transpiler — widen the translucent bubble
+        *********/
+
+        /// <summary>
+        /// Redirect the <em>first</em> <c>SpriteBatch.Draw</c> call in <c>BobberBar.draw</c> — the
+        /// translucent bubble behind the minigame — through <see cref="DrawBubble"/> so we can swap
+        /// in a wider sprite when extra fish are in play. Every other draw call is left untouched.
+        /// </summary>
+        private static IEnumerable<CodeInstruction> TranspileDraw(IEnumerable<CodeInstruction> instructions)
+        {
+            var target = AccessTools.Method(typeof(SpriteBatch), nameof(SpriteBatch.Draw), new[]
+            {
+                typeof(Texture2D), typeof(Vector2), typeof(Rectangle?), typeof(Color),
+                typeof(float), typeof(Vector2), typeof(float), typeof(SpriteEffects), typeof(float)
+            });
+            var replacement = AccessTools.Method(typeof(DoubleHookPatches), nameof(DrawBubble));
+
+            bool patched = false;
+            foreach (var instruction in instructions)
+            {
+                if (!patched && instruction.Calls(target))
+                {
+                    patched = true;
+                    // Stack layout is identical (SpriteBatch is passed as the first argument),
+                    // so we only swap the callvirt for a call to our static method.
+                    yield return new CodeInstruction(OpCodes.Call, replacement)
+                    {
+                        labels = instruction.labels,
+                        blocks = instruction.blocks
+                    };
+                    continue;
+                }
+
+                yield return instruction;
+            }
+
+            if (!patched)
+                Monitor.Log("Could not find the bubble draw call in BobberBar.draw — the bubble will not widen for extra fish.", LogLevel.Warn);
+        }
+
+
+        /// <summary>
+        /// Stand-in for vanilla's bubble draw call. Swaps the texture and source rect for a wider
+        /// bubble when extra fish are active; otherwise forwards to vanilla unchanged.
+        /// </summary>
+        internal static void DrawBubble(
+            SpriteBatch b, Texture2D texture, Vector2 position, Rectangle? sourceRectangle,
+            Color color, float rotation, Vector2 origin, float scale, SpriteEffects effects, float layerDepth)
+        {
+            try
+            {
+                // Only intercept the bubble itself — never any other sprite that reaches this call site.
+                if (Armed && sourceRectangle == VanillaBubbleSource)
+                {
+                    Texture2D? wider = null;
+                    Rectangle widerSource = default;
+
+                    switch (SpawnedExtraCount())
+                    {
+                        case 1:
+                            wider = CachedTwoFishBubble;
+                            widerSource = TwoFishBubbleSource;
+                            break;
+                        case 2:
+                            wider = CachedThreeFishBubble;
+                            widerSource = ThreeFishBubbleSource;
+                            break;
+                    }
+
+                    if (wider != null)
+                    {
+                        // Identical position/origin/scale/alpha/flip — only the artwork is wider,
+                        // so the bubble simply extends further right.
+                        b.Draw(wider, position, widerSource, color, rotation, origin, scale, effects, layerDepth);
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log($"Failed in {nameof(DrawBubble)}:\n{ex}", LogLevel.Error);
+            }
+
+            b.Draw(texture, position, sourceRectangle, color, rotation, origin, scale, effects, layerDepth);
         }
 
 
@@ -225,20 +313,19 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 Armed = Game1.random.NextDouble() < (double)chance;
                 CanSpawnThird = hasFeederRod && hasDoubleHook;
 
-                // Pre-load textures
                 try
                 {
                     CachedSecondFishTexture = ContentHelper.Load<Texture2D>(SecondFishTextureAsset);
                     CachedThirdFishTexture = ContentHelper.Load<Texture2D>(ThirdFishTextureAsset);
-                    CachedTwoFishBg = ContentHelper.Load<Texture2D>(TwoFishBackwindowAsset);
-                    CachedThreeFishBg = ContentHelper.Load<Texture2D>(ThreeFishBackwindowAsset);
+                    CachedTwoFishBubble = ContentHelper.Load<Texture2D>(TwoFishBubbleAsset);
+                    CachedThreeFishBubble = ContentHelper.Load<Texture2D>(ThreeFishBubbleAsset);
                 }
                 catch
                 {
                     CachedSecondFishTexture = null;
                     CachedThirdFishTexture = null;
-                    CachedTwoFishBg = null;
-                    CachedThreeFishBg = null;
+                    CachedTwoFishBubble = null;
+                    CachedThreeFishBubble = null;
                 }
             }
             catch (Exception ex)
@@ -273,10 +360,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         }
 
 
-        /// <summary>
-        /// POSTFIX: Spawn and simulate extra fish. Detect first-fish catch, keep
-        /// minigame alive for remaining extras, end when all resolved.
-        /// </summary>
+        /// <summary>POSTFIX: Spawn and simulate extra fish; keep the minigame alive until all resolve.</summary>
         private static void AfterUpdate(BobberBar __instance)
         {
             try
@@ -284,7 +368,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (!Armed || __instance.fadeIn)
                     return;
 
-                // 1. Spawn second fish at 50%
+                // 1. Spawn second fish at 50% of the first bar
                 if (!SecondSpawned)
                 {
                     if (__instance.distanceFromCatching >= SecondFishSpawnProgress)
@@ -292,7 +376,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     return;
                 }
 
-                // 2. Detect first fish catch
+                // 2. Detect the first fish being caught (vanilla just set fadeOut)
                 if (!FirstFishSecured && __instance.fadeOut && __instance.distanceFromCatching > 0.9f)
                 {
                     if (HasUnresolvedExtras())
@@ -305,7 +389,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     return;
                 }
 
-                // 3. Keep minigame alive or let it end
+                // 3. Keep the minigame alive, or let it end
                 if (FirstFishSecured)
                 {
                     if (HasUnresolvedExtras())
@@ -323,7 +407,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (SecondSpawned && !SecondLost && !SecondSecured)
                     UpdateFish(__instance, ref SecondPosition, ref SecondSpeed, ref SecondTarget, ref SecondDistanceFromCatching, ref SecondShake, out SecondLost, ref SecondSecured);
 
-                // 5. Spawn third fish
+                // 5. Spawn third fish (feeder rod + double hook only)
                 if (CanSpawnThird && !ThirdSpawned && SecondSpawned && !SecondLost)
                 {
                     bool firstFull = FirstFishSecured || __instance.distanceFromCatching >= 0.99f;
@@ -344,7 +428,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         }
 
 
-        /// <summary>PREFIX: Hide the vanilla fish sprite when first fish is secured.</summary>
+        /// <summary>PREFIX: Hide the vanilla fish sprite once the first fish is secured.</summary>
         private static void BeforeDraw(BobberBar __instance)
         {
             try
@@ -360,10 +444,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         }
 
 
-        /// <summary>
-        /// POSTFIX: Restore vanilla fish position, draw backwindow panel extension,
-        /// extra fish sprites, and progress bar fills.
-        /// </summary>
+        /// <summary>POSTFIX: Restore the vanilla fish position, then draw extra fish and their catch bars.</summary>
         private static void AfterDraw(BobberBar __instance, SpriteBatch b)
         {
             try
@@ -376,26 +457,22 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
                 Game1.StartWorldDrawInUI(b);
 
-                // --- Backwindow panel extension (drawn first = behind bar fills) ---
-                DrawBackwindowExtension(b, __instance);
-
-                int barIndex = 0;
-
-                // --- Second fish ---
-                if (SecondSpawned && !SecondLost)
+                // --- Second fish: bar slot 1 ---
+                if (SecondSpawned)
                 {
-                    if (!SecondSecured)
-                        DrawExtraFish(b, __instance, SecondPosition, SecondShake, CachedSecondFishTexture, new Color(60, 140, 200));
-                    DrawProgressBar(b, __instance, SecondSecured ? 1f : SecondDistanceFromCatching, barIndex);
-                    barIndex++;
+                    if (!SecondLost && !SecondSecured)
+                        DrawExtraFish(b, __instance, SecondPosition, SecondShake, CachedSecondFishTexture);
+
+                    DrawCatchBar(b, __instance, SecondSecured ? 1f : SecondDistanceFromCatching, slot: 1);
                 }
 
-                // --- Third fish ---
-                if (ThirdSpawned && !ThirdLost)
+                // --- Third fish: bar slot 2 ---
+                if (ThirdSpawned)
                 {
-                    if (!ThirdSecured)
-                        DrawExtraFish(b, __instance, ThirdPosition, ThirdShake, CachedThirdFishTexture, new Color(220, 140, 40));
-                    DrawProgressBar(b, __instance, ThirdSecured ? 1f : ThirdDistanceFromCatching, barIndex);
+                    if (!ThirdLost && !ThirdSecured)
+                        DrawExtraFish(b, __instance, ThirdPosition, ThirdShake, CachedThirdFishTexture);
+
+                    DrawCatchBar(b, __instance, ThirdSecured ? 1f : ThirdDistanceFromCatching, slot: 2);
                 }
 
                 Game1.EndWorldDrawInUI(b);
@@ -407,7 +484,7 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         }
 
 
-        /// <summary>Award extra fish when they were secured.</summary>
+        /// <summary>Award extra fish that were secured.</summary>
         private static void BeforePullFishFromWater(ref int numCaught)
         {
             try
@@ -423,6 +500,58 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             finally
             {
                 Reset();
+            }
+        }
+
+
+        /*********
+        ** Private methods — drawing
+        *********/
+
+        /// <summary>
+        /// Draw an extra catch progress bar. Pixel-for-pixel the same as vanilla's bar
+        /// (<see cref="Game1.staminaRect"/> + <see cref="Utility.getRedToGreenLerpColor"/>),
+        /// just shifted right by <paramref name="slot"/> × <see cref="BarSpacing"/>.
+        /// </summary>
+        /// <param name="slot">1 for the second fish, 2 for the third.</param>
+        private static void DrawCatchBar(SpriteBatch b, BobberBar bar, float progress, int slot)
+        {
+            b.Draw(
+                Game1.staminaRect,
+                new Rectangle(
+                    bar.xPositionOnScreen + VanillaBarX + slot * BarSpacing,
+                    bar.yPositionOnScreen + VanillaBarY + (int)(BarHeight * (1f - progress)),
+                    BarWidth,
+                    (int)(BarHeight * progress)),
+                Utility.getRedToGreenLerpColor(progress)
+            );
+        }
+
+
+        /// <summary>
+        /// Draw an extra fish on the track, matching vanilla's fish draw call
+        /// (origin 10,10 at scale 2, depth 0.88) but without the horizontal flip.
+        /// </summary>
+        private static void DrawExtraFish(
+            SpriteBatch b, BobberBar bar, float position, Vector2 shake, Texture2D? texture)
+        {
+            Vector2 drawPos = new Vector2(
+                bar.xPositionOnScreen + 64 + 18,
+                bar.yPositionOnScreen + 12 + 24 + position)
+                + shake + bar.everythingShake;
+
+            if (texture != null)
+            {
+                b.Draw(texture, drawPos, new Rectangle(0, 0, texture.Width, texture.Height),
+                    Color.White, 0f, new Vector2(texture.Width / 2f, texture.Height / 2f),
+                    2f, SpriteEffects.None, 0.88f);
+            }
+            else
+            {
+                // Fallback: the vanilla fish sprite
+                b.Draw(Game1.mouseCursors, drawPos, new Rectangle(614, 1840, 20, 20),
+                    Color.White, 0f, new Vector2(10f, 10f),
+                    2f, SpriteEffects.None, 0.88f);
             }
         }
 
@@ -511,115 +640,23 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         }
 
 
+        /// <summary>How many extra fish have spawned (0–2). Drives the bubble width.</summary>
+        private static int SpawnedExtraCount()
+        {
+            int count = 0;
+            if (SecondSpawned) count++;
+            if (ThirdSpawned) count++;
+            return count;
+        }
+
+
+        /// <summary>Check whether any extra fish are still in play.</summary>
         private static bool HasUnresolvedExtras()
         {
             if (SecondSpawned && !SecondLost && !SecondSecured) return true;
             if (ThirdSpawned && !ThirdLost && !ThirdSecured) return true;
             if (CanSpawnThird && !ThirdSpawned && SecondSpawned && !SecondLost) return true;
             return false;
-        }
-
-
-        /*********
-        ** Private methods — drawing
-        *********/
-
-        /// <summary>
-        /// Draw the right extension of the backwindow template, seamlessly continuing
-        /// the vanilla BobberBar panel to the right. Picks the 2-fish or 3-fish template
-        /// depending on how many extra fish are currently spawned. Does nothing if no
-        /// extra fish are active yet — the panel grows gradually.
-        /// </summary>
-        private static void DrawBackwindowExtension(SpriteBatch b, BobberBar bar)
-        {
-            if (!SecondSpawned)
-                return;
-
-            // Pick the wider template if the third fish is in play
-            Texture2D? template = ThirdSpawned ? CachedThreeFishBg : CachedTwoFishBg;
-            if (template == null)
-                return;
-
-            // Source rect: start from ExtSrcStartCol (col 38) to the template's right edge.
-            // This overlaps the last 3 vanilla panel cols (covering the right border) and
-            // continues into the extension area with the template's interior + right border.
-            int srcW = template.Width - ExtSrcStartCol;
-            int srcH = template.Height;
-
-            // Draw position: align so template col 38 sits at vanilla panel col 35 (= col 38 - TemplateColOffset)
-            float drawX = bar.xPositionOnScreen + VanillaPanelDrawX
-                        + (VanillaPanelSourceW - ExtOverlapCols) * 4f;
-            float drawY = bar.yPositionOnScreen;
-
-            b.Draw(
-                template,
-                new Vector2(drawX, drawY),
-                new Rectangle(ExtSrcStartCol, 0, srcW, srcH),
-                Color.White,
-                0f,
-                Vector2.Zero,
-                4f,
-                SpriteEffects.None,
-                0.89f // same depth as vanilla panel background
-            );
-        }
-
-
-        /// <summary>Draw an extra fish sprite on the bobber track (no horizontal flip).</summary>
-        private static void DrawExtraFish(
-            SpriteBatch b, BobberBar bar,
-            float position, Vector2 shake,
-            Texture2D? customTexture, Color fallbackTint)
-        {
-            Vector2 drawPos = new Vector2(
-                bar.xPositionOnScreen + 64 + 18,
-                bar.yPositionOnScreen + 12 + 24 + position)
-                + shake + bar.everythingShake;
-
-            if (customTexture != null)
-            {
-                b.Draw(customTexture, drawPos,
-                    new Rectangle(0, 0, customTexture.Width, customTexture.Height),
-                    Color.White, 0f,
-                    new Vector2(customTexture.Width / 2f, customTexture.Height / 2f),
-                    1.75f, SpriteEffects.None, 0.87f);
-            }
-            else
-            {
-                b.Draw(Game1.mouseCursors, drawPos,
-                    new Rectangle(614, 1840, 20, 20),
-                    fallbackTint * 0.9f, 0f, new Vector2(10f, 10f),
-                    1.75f, SpriteEffects.None, 0.87f);
-            }
-        }
-
-
-        /// <summary>
-        /// Draw a progress bar fill inside the backwindow extension.
-        /// Each bar slot is <see cref="BarSlotPx"/> wide (7 source cols × 4 = 28px).
-        /// The fill is centered within the slot using <see cref="BarFillInset"/>.
-        /// Uses <see cref="Utility.getRedToGreenLerpColor"/> — same as the vanilla catch bar.
-        /// </summary>
-        /// <param name="barIndex">0 = first extra bar (second fish), 1 = second extra bar (third fish).</param>
-        private static void DrawProgressBar(
-            SpriteBatch b, BobberBar bar,
-            float progress, int barIndex)
-        {
-            // Bar slot starts right at the vanilla panel's right edge
-            int slotX = bar.xPositionOnScreen + VanillaPanelDrawX + VanillaPanelSourceW * 4
-                      + barIndex * BarSlotPx;
-            int fillX = slotX + BarFillInset;
-            int fillY = bar.yPositionOnScreen + BarFillYOffset;
-
-            int fillH = (int)(progress * BarFillHeight);
-            if (fillH > 0)
-            {
-                b.Draw(
-                    Game1.staminaRect,
-                    new Rectangle(fillX, fillY + BarFillHeight - fillH, BarFillWidth, fillH),
-                    Utility.getRedToGreenLerpColor(progress)
-                );
-            }
         }
 
 
@@ -653,8 +690,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
             CachedSecondFishTexture = null;
             CachedThirdFishTexture = null;
-            CachedTwoFishBg = null;
-            CachedThreeFishBg = null;
+            CachedTwoFishBubble = null;
+            CachedThreeFishBubble = null;
             SavedBobberPosition = 0f;
         }
     }
