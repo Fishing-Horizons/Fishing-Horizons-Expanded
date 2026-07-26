@@ -140,6 +140,16 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 e.LoadFromModFile<Texture2D>("assets/3-fish-backwindow-bp.png", AssetLoadPriority.Exclusive);
             }
 
+            // --- Widened wooden frame sprites (extra fish) ---
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.TwoFishFrameAsset))
+            {
+                e.LoadFromModFile<Texture2D>("assets/2-fish-frame.png", AssetLoadPriority.Exclusive);
+            }
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.ThreeFishFrameAsset))
+            {
+                e.LoadFromModFile<Texture2D>("assets/3-fish-frame.png", AssetLoadPriority.Exclusive);
+            }
+
             // --- Willy's shop entry ---
             else if (this.IsEnabled && e.NameWithoutLocale.IsEquivalentTo("Data/Shops"))
             {
