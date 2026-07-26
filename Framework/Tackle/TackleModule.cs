@@ -118,13 +118,13 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 e.LoadFromModFile<Texture2D>("assets/double-hook.png", AssetLoadPriority.Exclusive);
             }
 
-            // --- Second fish placeholder texture ---
+            // --- Second fish sprite ---
             else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.SecondFishTextureAsset))
             {
                 e.LoadFromModFile<Texture2D>("assets/second-fish.png", AssetLoadPriority.Exclusive);
             }
 
-            // --- Third fish placeholder texture ---
+            // --- Third fish sprite ---
             else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.ThirdFishTextureAsset))
             {
                 e.LoadFromModFile<Texture2D>("assets/third-fish.png", AssetLoadPriority.Exclusive);
