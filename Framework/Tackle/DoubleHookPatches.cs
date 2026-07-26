@@ -84,9 +84,17 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /// </summary>
         private const int BarSpacing = 28;
 
-        /// <summary>Vanilla source rects in <c>Game1.mouseCursors</c> that the mod swaps out.</summary>
+        /// <summary>
+        /// Vertical step between sonar slots, in screen px. The sonar templates stack a slot every
+        /// 21 source px (24 → 45 → 66 tall), which is 84px at the sonar's 4× draw scale.
+        /// </summary>
+        private const int SonarSlotPitch = 84;
+
+        /// <summary>Vanilla source rects that the mod swaps out.</summary>
+        /// <remarks>The first two live in <c>Game1.mouseCursors</c>, the sonar in <c>Game1.mouseCursors_1_6</c>.</remarks>
         private static readonly Rectangle VanillaBubbleSource = new Rectangle(652, 1685, 52, 157);
         private static readonly Rectangle VanillaPanelSource = new Rectangle(644, 1999, 38, 150);
+        private static readonly Rectangle VanillaSonarSource = new Rectangle(227, 6, 29, 24);
 
 
         /*********
@@ -98,6 +106,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         public const string ThreeFishBubbleAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishBubble";
         public const string TwoFishFrameAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/TwoFishFrame";
         public const string ThreeFishFrameAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishFrame";
+        public const string TwoFishSonarAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/TwoFishSonar";
+        public const string ThreeFishSonarAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishSonar";
 
 
         /*********
@@ -144,12 +154,26 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         private static Texture2D? CachedThreeFishBubble;
         private static Texture2D? CachedTwoFishFrame;
         private static Texture2D? CachedThreeFishFrame;
+        private static Texture2D? CachedTwoFishSonar;
+        private static Texture2D? CachedThreeFishSonar;
 
         /// <summary>Cached opaque bounding boxes, keyed by texture. See <see cref="GetContentBounds"/>.</summary>
         private static readonly Dictionary<Texture2D, Rectangle> ContentBoundsCache = new Dictionary<Texture2D, Rectangle>();
 
         // -- temporary draw state --
         private static float SavedBobberPosition;
+
+        /// <summary>Whether the vanilla fish was genuinely inside the bar this tick, ignoring any override.</summary>
+        private static bool VanillaFishInBar;
+
+        /// <summary>Whether <see cref="AdjustBobberInBar"/> forced <c>bobberInBar</c> from false to true this tick.</summary>
+        private static bool ForcedInBar;
+
+        /// <summary>The first fish's catch progress as it stood before the current update tick.</summary>
+        private static float DistanceBeforeUpdate;
+
+        /// <summary>The minigame currently being drawn, so draw helpers can read its position.</summary>
+        private static BobberBar? CurrentBar;
 
 
         /*********
@@ -179,7 +203,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             harmony.Patch(
                 original: AccessTools.Method(typeof(BobberBar), nameof(BobberBar.update)),
                 prefix: new HarmonyMethod(typeof(DoubleHookPatches), nameof(BeforeUpdate)),
-                postfix: new HarmonyMethod(typeof(DoubleHookPatches), nameof(AfterUpdate))
+                postfix: new HarmonyMethod(typeof(DoubleHookPatches), nameof(AfterUpdate)),
+                transpiler: new HarmonyMethod(typeof(DoubleHookPatches), nameof(TranspileUpdate))
             );
             harmony.Patch(
                 original: AccessTools.Method(typeof(BobberBar), nameof(BobberBar.draw), new[] { typeof(SpriteBatch) }),
@@ -195,7 +220,106 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
 
         /*********
-        ** Transpiler — widen the translucent bubble
+        ** Transpiler — make the reel sound follow every fish
+        *********/
+
+        /// <summary>
+        /// Inject a call to <see cref="AdjustBobberInBar"/> straight after <c>BobberBar.update</c>
+        /// finishes working out <c>bobberInBar</c>, so the rest of the tick sees whether <em>any</em>
+        /// fish is inside the green bar rather than only the vanilla one.
+        /// </summary>
+        /// <remarks>
+        /// <c>bobberInBar</c> drives the reel sounds, the reel rotation and the shake, so overriding it
+        /// here is what makes the audio track all three fish. It also drives the first fish's catch
+        /// progress, which <see cref="AfterUpdate"/> corrects afterwards.
+        /// <para>The hook goes after the <em>last</em> write to the field, and inherits that
+        /// instruction's labels so branches that skip the final write still run it.</para>
+        /// </remarks>
+        private static IEnumerable<CodeInstruction> TranspileUpdate(IEnumerable<CodeInstruction> instructions)
+        {
+            var field = AccessTools.Field(typeof(BobberBar), nameof(BobberBar.bobberInBar));
+            var hook = AccessTools.Method(typeof(DoubleHookPatches), nameof(AdjustBobberInBar));
+            var code = new List<CodeInstruction>(instructions);
+
+            int lastStore = -1;
+            for (int i = 0; i < code.Count; i++)
+            {
+                if (code[i].StoresField(field))
+                    lastStore = i;
+            }
+
+            if (lastStore < 0 || lastStore + 1 >= code.Count)
+            {
+                Monitor.Log("Could not find where BobberBar.update sets bobberInBar — the reel sound will only follow the first fish.", LogLevel.Warn);
+                return code;
+            }
+
+            // Take over the labels of the instruction we're pushing down, so any branch that jumps
+            // over the final assignment lands on our hook instead of skipping it.
+            CodeInstruction next = code[lastStore + 1];
+            var loadInstance = new CodeInstruction(OpCodes.Ldarg_0) { labels = new List<Label>(next.labels) };
+            next.labels.Clear();
+
+            code.InsertRange(lastStore + 1, new[]
+            {
+                loadInstance,
+                new CodeInstruction(OpCodes.Call, hook)
+            });
+
+            return code;
+        }
+
+
+        /// <summary>
+        /// Widen <c>bobberInBar</c> to mean "any fish still in play is inside the green bar".
+        /// </summary>
+        /// <remarks>
+        /// Two things were wrong before. The reel sound only ever reacted to the vanilla fish, so extra
+        /// fish were fought in silence; and once the first fish was secured the vanilla fish was parked
+        /// inside the bar to stop its progress draining, which pinned <c>bobberInBar</c> to true and
+        /// looped the reel sound forever. Recomputing the flag from the real state of every unresolved
+        /// fish fixes both at once, and vanilla's own sound handling then does the right thing.
+        /// </remarks>
+        internal static void AdjustBobberInBar(BobberBar bar)
+        {
+            try
+            {
+                ForcedInBar = false;
+                if (!Armed)
+                    return;
+
+                // Once the first fish is secured its sprite is only a leftover — it must not keep the sound alive.
+                VanillaFishInBar = bar.bobberInBar && !FirstFishSecured;
+
+                bool anyInBar =
+                    VanillaFishInBar
+                    || IsExtraInBar(bar, SecondSpawned, SecondLost, SecondSecured, SecondPosition)
+                    || IsExtraInBar(bar, ThirdSpawned, ThirdLost, ThirdSecured, ThirdPosition);
+
+                ForcedInBar = anyInBar && !bar.bobberInBar;
+                bar.bobberInBar = anyInBar;
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log($"Failed in {nameof(AdjustBobberInBar)}:\n{ex}", LogLevel.Error);
+            }
+        }
+
+
+        /// <summary>Whether an extra fish that is still in play sits inside the green bar.</summary>
+        /// <remarks>Same test vanilla uses for its own fish, so the extras behave identically.</remarks>
+        private static bool IsExtraInBar(BobberBar bar, bool spawned, bool lost, bool secured, float position)
+        {
+            if (!spawned || lost || secured)
+                return false;
+
+            return position + 12f <= bar.bobberBarPos - 32f + bar.bobberBarHeight
+                && position - 16f >= bar.bobberBarPos - 32f;
+        }
+
+
+        /*********
+        ** Transpiler — widen the translucent bubble, frame and sonar
         *********/
 
         /// <summary>
@@ -217,9 +341,26 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             });
             var replacement = AccessTools.Method(typeof(DoubleHookPatches), nameof(DrawSprite));
 
+            var drawInMenu = AccessTools.Method(typeof(Item), nameof(Item.drawInMenu), new[]
+            {
+                typeof(SpriteBatch), typeof(Vector2), typeof(float)
+            });
+            var drawSonarFish = AccessTools.Method(typeof(DoubleHookPatches), nameof(DrawSonarFish));
+
             int patched = 0;
             foreach (var instruction in instructions)
             {
+                // The sonar's fish icon — the only drawInMenu call in this method.
+                if (drawInMenu != null && instruction.Calls(drawInMenu))
+                {
+                    yield return new CodeInstruction(OpCodes.Call, drawSonarFish)
+                    {
+                        labels = instruction.labels,
+                        blocks = instruction.blocks
+                    };
+                    continue;
+                }
+
                 if (instruction.Calls(target))
                 {
                     patched++;
@@ -262,14 +403,23 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (extras > 0)
                 {
                     Texture2D? swap = null;
+                    bool isSonar = false;
 
-                    if (sourceRectangle == VanillaBubbleSource)
+                    if (texture == Game1.mouseCursors && sourceRectangle == VanillaBubbleSource)
                         swap = extras == 1 ? CachedTwoFishBubble : CachedThreeFishBubble;
-                    else if (sourceRectangle == VanillaPanelSource)
+                    else if (texture == Game1.mouseCursors && sourceRectangle == VanillaPanelSource)
                         swap = extras == 1 ? CachedTwoFishFrame : CachedThreeFishFrame;
+                    else if (texture == Game1.mouseCursors_1_6 && sourceRectangle == VanillaSonarSource)
+                    {
+                        swap = extras == 1 ? CachedTwoFishSonar : CachedThreeFishSonar;
+                        isSonar = true;
+                    }
 
                     if (swap != null)
                     {
+                        if (isSonar)
+                            position.X += GetSonarShift(extras, effects);
+
                         b.Draw(swap, position, GetContentBounds(swap), color, rotation, origin, scale, effects, layerDepth);
                         return;
                     }
@@ -281,6 +431,54 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             }
 
             b.Draw(texture, position, sourceRectangle, color, rotation, origin, scale, effects, layerDepth);
+        }
+
+
+        /// <summary>
+        /// How far right the sonar has to move so the widened bubble doesn't swallow it.
+        /// </summary>
+        /// <remarks>
+        /// Vanilla tucks the sonar's left edge 24px inside the bubble's right edge. The bubble grows by
+        /// one bar pitch per extra fish, so matching that shift keeps the overlap exactly as vanilla
+        /// draws it. When the bar sits near the right of the screen the game flips the sonar over to the
+        /// left instead, where the widening never reaches it — so that case stays put.
+        /// </remarks>
+        private static float GetSonarShift(int extras, SpriteEffects effects)
+        {
+            return effects == SpriteEffects.FlipHorizontally
+                ? 0f
+                : extras * BarSpacing;
+        }
+
+
+        /// <summary>
+        /// Stand-in for the sonar's <c>fishObject.drawInMenu</c> call: shifts the icon along with the
+        /// sonar frame and fills in the extra slots.
+        /// </summary>
+        internal static void DrawSonarFish(Item fish, SpriteBatch b, Vector2 location, float scaleSize)
+        {
+            try
+            {
+                int extras = Armed ? SpawnedExtraCount() : 0;
+                if (extras > 0)
+                {
+                    // The sonar frame is drawn before the icons, so it has already picked its side;
+                    // vanilla decides that from the bar's position, and we mirror the same test.
+                    bool flipped = CurrentBar != null
+                        && CurrentBar.xPositionOnScreen > Game1.viewport.Width * 0.75f;
+
+                    location.X += GetSonarShift(extras, flipped ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
+
+                    for (int slot = extras; slot > 0; slot--)
+                        fish.drawInMenu(b, location + new Vector2(0f, slot * SonarSlotPitch), scaleSize);
+                }
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log($"Failed in {nameof(DrawSonarFish)}:\n{ex}", LogLevel.Error);
+            }
+
+            fish.drawInMenu(b, location, scaleSize);
         }
 
 
@@ -370,6 +568,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     CachedThreeFishBubble = ContentHelper.Load<Texture2D>(ThreeFishBubbleAsset);
                     CachedTwoFishFrame = ContentHelper.Load<Texture2D>(TwoFishFrameAsset);
                     CachedThreeFishFrame = ContentHelper.Load<Texture2D>(ThreeFishFrameAsset);
+                    CachedTwoFishSonar = ContentHelper.Load<Texture2D>(TwoFishSonarAsset);
+                    CachedThreeFishSonar = ContentHelper.Load<Texture2D>(ThreeFishSonarAsset);
                 }
                 catch (Exception ex)
                 {
@@ -380,6 +580,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     CachedThreeFishBubble = null;
                     CachedTwoFishFrame = null;
                     CachedThreeFishFrame = null;
+                    CachedTwoFishSonar = null;
+                    CachedThreeFishSonar = null;
                 }
             }
             catch (Exception ex)
@@ -391,19 +593,29 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
 
         /// <summary>
-        /// PREFIX: When the first fish is already secured and extras are still active,
-        /// prevent the vanilla update from re-triggering fadeOut every frame.
+        /// PREFIX: Remember the first fish's progress, and while extras are still being fought keep
+        /// that progress just short of full so the vanilla update can't finish the minigame early.
         /// </summary>
+        /// <remarks>
+        /// This used to park the vanilla fish in the middle of the green bar to stop its progress
+        /// draining. That pinned <c>bobberInBar</c> to true, which looped the reel sound for as long as
+        /// the extras were in play. Holding the progress value directly does the same job without
+        /// lying about where the fish is, and <see cref="AdjustBobberInBar"/> now drives the sound.
+        /// </remarks>
         private static void BeforeUpdate(BobberBar __instance)
         {
             try
             {
-                if (!Armed || !FirstFishSecured)
-                    return;
-                if (!HasUnresolvedExtras())
+                if (!Armed)
                     return;
 
-                __instance.bobberPosition = __instance.bobberBarPos + __instance.bobberBarHeight / 2f - 16f;
+                DistanceBeforeUpdate = __instance.distanceFromCatching;
+
+                if (!FirstFishSecured || !HasUnresolvedExtras())
+                    return;
+
+                // A single tick can only move this by ±0.003, so clamping here keeps it clear of both
+                // ends and vanilla never fires the caught or escaped branch while extras remain.
                 __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
                 __instance.fadeOut = false;
             }
@@ -421,6 +633,12 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             {
                 if (!Armed || __instance.fadeIn)
                     return;
+
+                // 0. If bobberInBar was borrowed for an extra fish, the vanilla update credited the
+                //    first fish's bar for progress it didn't earn. Hold that bar where it was instead:
+                //    while another fish is being reeled in, the first fish's progress simply pauses.
+                if (ForcedInBar && !FirstFishSecured)
+                    __instance.distanceFromCatching = DistanceBeforeUpdate;
 
                 // 1. Spawn second fish at 50% of the first bar
                 if (!SecondSpawned)
@@ -482,11 +700,13 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         }
 
 
-        /// <summary>PREFIX: Hide the vanilla fish sprite once the first fish is secured.</summary>
+        /// <summary>PREFIX: Record the live minigame, and hide the vanilla fish once it's secured.</summary>
         private static void BeforeDraw(BobberBar __instance)
         {
             try
             {
+                CurrentBar = __instance;
+
                 if (!Armed || !FirstFishSecured) return;
                 SavedBobberPosition = __instance.bobberPosition;
                 __instance.bobberPosition = -10000f;
@@ -748,7 +968,13 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             CachedThreeFishBubble = null;
             CachedTwoFishFrame = null;
             CachedThreeFishFrame = null;
+            CachedTwoFishSonar = null;
+            CachedThreeFishSonar = null;
             SavedBobberPosition = 0f;
+            VanillaFishInBar = false;
+            ForcedInBar = false;
+            DistanceBeforeUpdate = 0f;
+            CurrentBar = null;
         }
     }
 }

@@ -150,6 +150,16 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 e.LoadFromModFile<Texture2D>("assets/3-fish-frame.png", AssetLoadPriority.Exclusive);
             }
 
+            // --- Multi-slot sonar sprites (extra fish) ---
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.TwoFishSonarAsset))
+            {
+                e.LoadFromModFile<Texture2D>("assets/2-fish-sonar.png", AssetLoadPriority.Exclusive);
+            }
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.ThreeFishSonarAsset))
+            {
+                e.LoadFromModFile<Texture2D>("assets/3-fish-sonar.png", AssetLoadPriority.Exclusive);
+            }
+
             // --- Willy's shop entry ---
             else if (this.IsEnabled && e.NameWithoutLocale.IsEquivalentTo("Data/Shops"))
             {
