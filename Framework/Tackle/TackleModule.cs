@@ -130,6 +130,16 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 e.LoadFromModFile<Texture2D>("assets/third-fish.png", AssetLoadPriority.Exclusive);
             }
 
+            // --- Backwindow panel extensions ---
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.TwoFishBackwindowAsset))
+            {
+                e.LoadFromModFile<Texture2D>("assets/2-fish-backwindow-bp.png", AssetLoadPriority.Exclusive);
+            }
+            else if (e.NameWithoutLocale.IsEquivalentTo(DoubleHookPatches.ThreeFishBackwindowAsset))
+            {
+                e.LoadFromModFile<Texture2D>("assets/3-fish-backwindow-bp.png", AssetLoadPriority.Exclusive);
+            }
+
             // --- Willy's shop entry ---
             else if (this.IsEnabled && e.NameWithoutLocale.IsEquivalentTo("Data/Shops"))
             {
