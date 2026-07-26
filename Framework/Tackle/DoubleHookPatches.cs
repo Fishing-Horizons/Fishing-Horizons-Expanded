@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Menus;
+
 using StardewValley.Tools;
 
 namespace FishingHorizonsExpanded.Framework.Tackle
@@ -21,17 +22,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
     /// Gets its own progress bar further to the right.</item>
     /// </list>
     ///
-    /// Lifecycle of the first fish:
-    /// When the vanilla distanceFromCatching hits 1.0, the first fish is "secured" — its catch sound
-    /// plays once, the vanilla fish sprite disappears from the track, and the minigame continues for
-    /// the remaining extra fish. A <c>BeforeUpdate</c> prefix prevents the vanilla code from
-    /// re-triggering the fadeOut every frame (which caused the "bugged sounds" loop). Once all extra
-    /// fish are resolved (secured or lost), we let distanceFromCatching reach 1.0 again so the vanilla
-    /// fadeOut proceeds naturally.
-    ///
-    /// Rendering: extra fish use colored placeholder textures (no horizontal flip). Progress bars use
-    /// <see cref="IClickableMenu.drawTextureBox"/> for a native Stardew Valley frame, with the
-    /// standard <see cref="Utility.getRedToGreenLerpColor"/> fill — matching the vanilla catch bar.
+    /// Rendering uses custom backwindow sprites (<c>2-fish-backwindow-bp.png</c> and
+    /// <c>3-fish-backwindow-bp.png</c>) to seamlessly extend the vanilla BobberBar panel
+    /// to the right. The panel grows gradually — the 2-fish backwindow appears when the
+    /// second fish spawns, then switches to the 3-fish backwindow when the third spawns.
+    /// Progress bars use <see cref="Utility.getRedToGreenLerpColor"/> fill, matching vanilla.
     ///
     /// State is static because the bobber bar minigame only ever runs for the local player.
     /// All patches swallow their own exceptions, so a failure can never crash the game.
@@ -55,25 +50,60 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
 
         /*********
-        ** Progress bar layout
+        ** Backwindow panel layout
         *********/
-        /// <summary>Width of each extra catch progress bar fill area (matches vanilla).</summary>
+        // The vanilla BobberBar draws its background from Game1.mouseCursors at
+        // source (644, 1999, 38, 150), scale 4×, position (xPositionOnScreen + 64, yPositionOnScreen).
+        // Our backwindow templates extend this panel to the right.
+        //
+        // Template alignment: template col 3 = vanilla panel col 0 (left border).
+        // Template cols 0–2 are transparent padding. The interior starts at col ~6.
+        //
+        // Extension drawing: we draw the right portion of the template (starting from
+        // col 38, which overlaps the last 3 vanilla panel cols to cover the right border),
+        // seamlessly extending the panel with new bar column area.
+
+        /// <summary>Vanilla panel x-offset from xPositionOnScreen.</summary>
+        private const int VanillaPanelDrawX = 64;
+
+        /// <summary>Vanilla panel source width in pixels (38 cols at source scale).</summary>
+        private const int VanillaPanelSourceW = 38;
+
+        /// <summary>Column offset: template col 3 = vanilla col 0.</summary>
+        private const int TemplateColOffset = 3;
+
+        /// <summary>How many vanilla cols we overlap to cover the right border seam.</summary>
+        private const int ExtOverlapCols = 3;
+
+        /// <summary>Source column where we start drawing the extension (= TemplateColOffset + VanillaPanelSourceW - ExtOverlapCols).</summary>
+        private const int ExtSrcStartCol = TemplateColOffset + VanillaPanelSourceW - ExtOverlapCols; // 38
+
+        /// <summary>Width of each extra bar slot in source pixels (from 3-fish-example analysis).</summary>
+        private const int BarSlotSourceW = 7;
+
+        /// <summary>Width of each extra bar slot at 4× scale.</summary>
+        private const int BarSlotPx = BarSlotSourceW * 4; // 28
+
+        /// <summary>Progress fill width (4 source cols × 4 = 16px, matches vanilla catch bar).</summary>
         private const int BarFillWidth = 16;
 
-        /// <summary>Height of each extra catch progress bar fill area.</summary>
-        private const int BarFillHeight = 548;
+        /// <summary>Horizontal inset of fill from the left edge of a bar slot (centers 16px in 28px).</summary>
+        private const int BarFillInset = (BarSlotPx - BarFillWidth) / 2; // 6
 
-        /// <summary>Border thickness from drawTextureBox at scale 4 with 6×6 source (corner = 2 × 4 = 8).</summary>
-        private const int BoxBorder = 8;
+        /// <summary>Progress fill height in pixels.</summary>
+        private const int BarFillHeight = 568;
 
-        /// <summary>Horizontal gap between extra progress bar frames.</summary>
-        private const int BarSpacing = 8;
+        /// <summary>Progress fill y-offset from yPositionOnScreen.</summary>
+        private const int BarFillYOffset = 16;
 
-        /// <summary>X offset from xPositionOnScreen to the first extra bar frame (right of the vanilla panel).</summary>
-        private const int FirstBarFrameX = 224;
 
-        /// <summary>Y offset from yPositionOnScreen for the top of each extra bar frame.</summary>
-        private const int BarFrameY = 16;
+        /*********
+        ** Texture asset names
+        *********/
+        public const string SecondFishTextureAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/SecondFish";
+        public const string ThirdFishTextureAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThirdFish";
+        public const string TwoFishBackwindowAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/TwoFishBackwindow";
+        public const string ThreeFishBackwindowAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishBackwindow";
 
 
         /*********
@@ -117,16 +147,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         // -- cached textures --
         private static Texture2D? CachedSecondFishTexture;
         private static Texture2D? CachedThirdFishTexture;
+        private static Texture2D? CachedTwoFishBg;
+        private static Texture2D? CachedThreeFishBg;
 
         // -- temporary draw state --
         private static float SavedBobberPosition;
-
-
-        /*********
-        ** Constants — texture asset names
-        *********/
-        public const string SecondFishTextureAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/SecondFish";
-        public const string ThirdFishTextureAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThirdFish";
 
 
         /*********
@@ -186,7 +211,6 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (__instance.bossFish || __instance.fromFishPond)
                     return;
 
-                // Detect equipment
                 var rod = Game1.player.CurrentTool as FishingRod;
                 bool hasFeederRod = rod?.QualifiedItemId == Rods.RodsModule.FeederRodQualifiedId;
                 bool hasDoubleHook = __instance.bobbers?.Contains(TackleModule.DoubleHookQualifiedId) == true;
@@ -194,16 +218,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (!hasFeederRod && !hasDoubleHook)
                     return;
 
-                // Determine second fish chance
-                float chance;
-                if (hasFeederRod)
-                    chance = Math.Clamp(GetFeederRodChance(), 0f, 1f);
-                else
-                    chance = Math.Clamp(GetDoubleHookChance(), 0f, 1f);
+                float chance = hasFeederRod
+                    ? Math.Clamp(GetFeederRodChance(), 0f, 1f)
+                    : Math.Clamp(GetDoubleHookChance(), 0f, 1f);
 
                 Armed = Game1.random.NextDouble() < (double)chance;
-
-                // Third fish only possible with feeder rod + double hook combo
                 CanSpawnThird = hasFeederRod && hasDoubleHook;
 
                 // Pre-load textures
@@ -211,11 +230,15 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 {
                     CachedSecondFishTexture = ContentHelper.Load<Texture2D>(SecondFishTextureAsset);
                     CachedThirdFishTexture = ContentHelper.Load<Texture2D>(ThirdFishTextureAsset);
+                    CachedTwoFishBg = ContentHelper.Load<Texture2D>(TwoFishBackwindowAsset);
+                    CachedThreeFishBg = ContentHelper.Load<Texture2D>(ThreeFishBackwindowAsset);
                 }
                 catch
                 {
                     CachedSecondFishTexture = null;
                     CachedThirdFishTexture = null;
+                    CachedTwoFishBg = null;
+                    CachedThreeFishBg = null;
                 }
             }
             catch (Exception ex)
@@ -229,8 +252,6 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /// <summary>
         /// PREFIX: When the first fish is already secured and extras are still active,
         /// prevent the vanilla update from re-triggering fadeOut every frame.
-        /// Forces the vanilla fish inside the player's bar (so distanceFromCatching
-        /// only increases, avoiding drain sounds) and clamps distanceFromCatching below 1.0.
         /// </summary>
         private static void BeforeUpdate(BobberBar __instance)
         {
@@ -241,15 +262,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (!HasUnresolvedExtras())
                     return;
 
-                // Force the vanilla fish inside the player's green bar so vanilla
-                // code treats it as "in bar" → distanceFromCatching only increases,
-                // no drain sounds or escape triggers.
                 __instance.bobberPosition = __instance.bobberBarPos + __instance.bobberBarHeight / 2f - 16f;
-
-                // Clamp below 1.0 so vanilla doesn't trigger the fadeOut/catch sequence again
                 __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
-
-                // Ensure fadeOut stays off
                 __instance.fadeOut = false;
             }
             catch (Exception ex)
@@ -260,9 +274,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
 
         /// <summary>
-        /// POSTFIX: Spawn and simulate extra fish. Detect when the first fish is caught
-        /// (vanilla set fadeOut = true) and keep the minigame alive for remaining extras.
-        /// When all extras are resolved, let distanceFromCatching reach 1.0 so vanilla ends normally.
+        /// POSTFIX: Spawn and simulate extra fish. Detect first-fish catch, keep
+        /// minigame alive for remaining extras, end when all resolved.
         /// </summary>
         private static void AfterUpdate(BobberBar __instance)
         {
@@ -271,108 +284,57 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (!Armed || __instance.fadeIn)
                     return;
 
-                // ---------------------------------------------------------------
-                // 1. Spawn second fish at 50% of first bar
-                // ---------------------------------------------------------------
+                // 1. Spawn second fish at 50%
                 if (!SecondSpawned)
                 {
                     if (__instance.distanceFromCatching >= SecondFishSpawnProgress)
-                    {
-                        SpawnFish(
-                            __instance,
-                            out SecondSpawned,
-                            out SecondPosition, out SecondSpeed, out SecondTarget,
-                            out SecondDistanceFromCatching
-                        );
-                    }
-                    return; // nothing else to do until second fish exists
+                        SpawnFish(__instance, out SecondSpawned, out SecondPosition, out SecondSpeed, out SecondTarget, out SecondDistanceFromCatching);
+                    return;
                 }
 
-                // ---------------------------------------------------------------
-                // 2. Detect first fish catch (vanilla just set fadeOut = true)
-                //    This fires ONCE on the frame vanilla first triggers fadeOut.
-                // ---------------------------------------------------------------
+                // 2. Detect first fish catch
                 if (!FirstFishSecured && __instance.fadeOut && __instance.distanceFromCatching > 0.9f)
                 {
                     if (HasUnresolvedExtras())
                     {
                         FirstFishSecured = true;
-
-                        // Undo vanilla's fadeOut so the minigame stays open.
-                        // Vanilla already played the catch sound ("jingle1") this frame — perfect.
                         __instance.fadeOut = false;
                         __instance.distanceFromCatching = 0.99f;
-
-                        // Restore scale in case vanilla's fadeOut processing decreased it
                         __instance.scale = 1f;
                     }
-                    // If no unresolved extras, let vanilla proceed (fadeOut stays true).
                     return;
                 }
 
-                // ---------------------------------------------------------------
-                // 3. While first fish is secured: keep minigame alive
-                // ---------------------------------------------------------------
+                // 3. Keep minigame alive or let it end
                 if (FirstFishSecured)
                 {
                     if (HasUnresolvedExtras())
                     {
-                        // Safety clamp (prefix should handle this, but belt-and-suspenders)
                         __instance.distanceFromCatching = Math.Min(__instance.distanceFromCatching, 0.99f);
                         __instance.fadeOut = false;
                     }
                     else
                     {
-                        // All extras resolved — let the vanilla fadeOut proceed naturally
                         __instance.distanceFromCatching = 1f;
-                        // Vanilla will set fadeOut on the next frame's update
                     }
                 }
 
-                // ---------------------------------------------------------------
                 // 4. Update second fish
-                // ---------------------------------------------------------------
                 if (SecondSpawned && !SecondLost && !SecondSecured)
-                {
-                    UpdateFish(
-                        __instance,
-                        ref SecondPosition, ref SecondSpeed, ref SecondTarget,
-                        ref SecondDistanceFromCatching, ref SecondShake,
-                        out SecondLost, ref SecondSecured
-                    );
-                }
+                    UpdateFish(__instance, ref SecondPosition, ref SecondSpeed, ref SecondTarget, ref SecondDistanceFromCatching, ref SecondShake, out SecondLost, ref SecondSecured);
 
-                // ---------------------------------------------------------------
-                // 5. Spawn third fish (feeder rod + double hook only)
-                // ---------------------------------------------------------------
+                // 5. Spawn third fish
                 if (CanSpawnThird && !ThirdSpawned && SecondSpawned && !SecondLost)
                 {
-                    bool firstBarFull = FirstFishSecured || __instance.distanceFromCatching >= 0.99f;
-                    bool secondBarHalf = SecondDistanceFromCatching >= ThirdFishSpawnProgress;
-
-                    if (firstBarFull && secondBarHalf)
-                    {
-                        SpawnFish(
-                            __instance,
-                            out ThirdSpawned,
-                            out ThirdPosition, out ThirdSpeed, out ThirdTarget,
-                            out ThirdDistanceFromCatching
-                        );
-                    }
+                    bool firstFull = FirstFishSecured || __instance.distanceFromCatching >= 0.99f;
+                    bool secondHalf = SecondDistanceFromCatching >= ThirdFishSpawnProgress;
+                    if (firstFull && secondHalf)
+                        SpawnFish(__instance, out ThirdSpawned, out ThirdPosition, out ThirdSpeed, out ThirdTarget, out ThirdDistanceFromCatching);
                 }
 
-                // ---------------------------------------------------------------
                 // 6. Update third fish
-                // ---------------------------------------------------------------
                 if (ThirdSpawned && !ThirdLost && !ThirdSecured)
-                {
-                    UpdateFish(
-                        __instance,
-                        ref ThirdPosition, ref ThirdSpeed, ref ThirdTarget,
-                        ref ThirdDistanceFromCatching, ref ThirdShake,
-                        out ThirdLost, ref ThirdSecured
-                    );
-                }
+                    UpdateFish(__instance, ref ThirdPosition, ref ThirdSpeed, ref ThirdTarget, ref ThirdDistanceFromCatching, ref ThirdShake, out ThirdLost, ref ThirdSecured);
             }
             catch (Exception ex)
             {
@@ -382,19 +344,14 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         }
 
 
-        /// <summary>
-        /// PREFIX: Hide the vanilla fish sprite when the first fish is already secured.
-        /// We move bobberPosition off-screen before the vanilla draw runs, then restore it after.
-        /// </summary>
+        /// <summary>PREFIX: Hide the vanilla fish sprite when first fish is secured.</summary>
         private static void BeforeDraw(BobberBar __instance)
         {
             try
             {
-                if (!Armed || !FirstFishSecured)
-                    return;
-
+                if (!Armed || !FirstFishSecured) return;
                 SavedBobberPosition = __instance.bobberPosition;
-                __instance.bobberPosition = -10000f; // off-screen → vanilla draws it invisibly
+                __instance.bobberPosition = -10000f;
             }
             catch (Exception ex)
             {
@@ -404,14 +361,13 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
 
         /// <summary>
-        /// POSTFIX: Restore vanilla fish position, then draw extra fish sprites and
-        /// native-style progress bars.
+        /// POSTFIX: Restore vanilla fish position, draw backwindow panel extension,
+        /// extra fish sprites, and progress bar fills.
         /// </summary>
         private static void AfterDraw(BobberBar __instance, SpriteBatch b)
         {
             try
             {
-                // Restore vanilla fish position (even if we don't draw anything)
                 if (FirstFishSecured)
                     __instance.bobberPosition = SavedBobberPosition;
 
@@ -420,22 +376,17 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
                 Game1.StartWorldDrawInUI(b);
 
+                // --- Backwindow panel extension (drawn first = behind bar fills) ---
+                DrawBackwindowExtension(b, __instance);
+
                 int barIndex = 0;
 
                 // --- Second fish ---
                 if (SecondSpawned && !SecondLost)
                 {
-                    // Fish sprite on the track (only while still being caught)
                     if (!SecondSecured)
-                    {
-                        DrawExtraFish(b, __instance, SecondPosition, SecondShake,
-                            CachedSecondFishTexture, new Color(60, 140, 200));
-                    }
-
-                    // Progress bar (always visible while fish is alive)
-                    DrawProgressBar(b, __instance,
-                        SecondSecured ? 1f : SecondDistanceFromCatching,
-                        barIndex);
+                        DrawExtraFish(b, __instance, SecondPosition, SecondShake, CachedSecondFishTexture, new Color(60, 140, 200));
+                    DrawProgressBar(b, __instance, SecondSecured ? 1f : SecondDistanceFromCatching, barIndex);
                     barIndex++;
                 }
 
@@ -443,14 +394,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 if (ThirdSpawned && !ThirdLost)
                 {
                     if (!ThirdSecured)
-                    {
-                        DrawExtraFish(b, __instance, ThirdPosition, ThirdShake,
-                            CachedThirdFishTexture, new Color(220, 140, 40));
-                    }
-
-                    DrawProgressBar(b, __instance,
-                        ThirdSecured ? 1f : ThirdDistanceFromCatching,
-                        barIndex);
+                        DrawExtraFish(b, __instance, ThirdPosition, ThirdShake, CachedThirdFishTexture, new Color(220, 140, 40));
+                    DrawProgressBar(b, __instance, ThirdSecured ? 1f : ThirdDistanceFromCatching, barIndex);
                 }
 
                 Game1.EndWorldDrawInUI(b);
@@ -467,13 +412,9 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         {
             try
             {
-                if (!Armed)
-                    return;
-
-                if (SecondSecured)
-                    numCaught += 1;
-                if (ThirdSecured)
-                    numCaught += 1;
+                if (!Armed) return;
+                if (SecondSecured) numCaught += 1;
+                if (ThirdSecured) numCaught += 1;
             }
             catch (Exception ex)
             {
@@ -490,19 +431,16 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         ** Private methods — fish simulation
         *********/
 
-        /// <summary>Spawn an extra fish at the far side of the track from the player's bar.</summary>
         private static void SpawnFish(
-            BobberBar bar,
-            out bool spawned,
+            BobberBar bar, out bool spawned,
             out float position, out float speed, out float target,
             out float distanceFromCatching)
         {
             spawned = true;
             speed = 0f;
             target = -1f;
-            distanceFromCatching = 0.5f; // start at 50%
+            distanceFromCatching = 0.5f;
 
-            // Bite on the far side of the track from the player's bar
             float barCenter = bar.bobberBarPos + bar.bobberBarHeight / 2f;
             position = barCenter < 274f
                 ? Game1.random.Next(350, 500)
@@ -513,7 +451,6 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         }
 
 
-        /// <summary>Simulate one tick of an extra fish's movement and catch progress.</summary>
         private static void UpdateFish(
             BobberBar bar,
             ref float position, ref float speed, ref float target,
@@ -521,8 +458,6 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             out bool lost, ref bool secured)
         {
             lost = false;
-
-            // --- Fish movement (same algorithm as the main fish, driven by difficulty) ---
             float difficulty = bar.difficulty;
 
             if (target < 0f || Math.Abs(position - target) <= 3f)
@@ -546,22 +481,18 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             }
             position = Math.Max(0f, Math.Min(532f, position + speed));
 
-            // --- Catch progress: fills inside the green bar, drains outside ---
             bool inBar = position + 12f <= bar.bobberBarPos - 32f + bar.bobberBarHeight
                       && position - 16f >= bar.bobberBarPos - 32f;
 
             if (inBar)
             {
                 distanceFromCatching = Math.Min(1f, distanceFromCatching + CatchGainPerTick);
-                shake = new Vector2(
-                    Game1.random.Next(-10, 11) / 10f,
-                    Game1.random.Next(-10, 11) / 10f);
+                shake = new Vector2(Game1.random.Next(-10, 11) / 10f, Game1.random.Next(-10, 11) / 10f);
             }
             else
             {
                 distanceFromCatching -= CatchLossPerTick;
                 shake = Vector2.Zero;
-
                 if (distanceFromCatching <= 0f)
                 {
                     distanceFromCatching = 0f;
@@ -571,7 +502,6 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 }
             }
 
-            // Auto-secure when bar is full
             if (distanceFromCatching >= 1f)
             {
                 distanceFromCatching = 1f;
@@ -581,22 +511,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         }
 
 
-        /// <summary>Check whether any extra fish are still in play (not yet resolved).</summary>
         private static bool HasUnresolvedExtras()
         {
-            // Second fish still being caught
-            if (SecondSpawned && !SecondLost && !SecondSecured)
-                return true;
-
-            // Third fish still being caught
-            if (ThirdSpawned && !ThirdLost && !ThirdSecured)
-                return true;
-
-            // Third fish hasn't spawned but conditions could still be met
-            // (second is alive, so the third can still appear)
-            if (CanSpawnThird && !ThirdSpawned && SecondSpawned && !SecondLost)
-                return true;
-
+            if (SecondSpawned && !SecondLost && !SecondSecured) return true;
+            if (ThirdSpawned && !ThirdLost && !ThirdSecured) return true;
+            if (CanSpawnThird && !ThirdSpawned && SecondSpawned && !SecondLost) return true;
             return false;
         }
 
@@ -604,6 +523,47 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /*********
         ** Private methods — drawing
         *********/
+
+        /// <summary>
+        /// Draw the right extension of the backwindow template, seamlessly continuing
+        /// the vanilla BobberBar panel to the right. Picks the 2-fish or 3-fish template
+        /// depending on how many extra fish are currently spawned. Does nothing if no
+        /// extra fish are active yet — the panel grows gradually.
+        /// </summary>
+        private static void DrawBackwindowExtension(SpriteBatch b, BobberBar bar)
+        {
+            if (!SecondSpawned)
+                return;
+
+            // Pick the wider template if the third fish is in play
+            Texture2D? template = ThirdSpawned ? CachedThreeFishBg : CachedTwoFishBg;
+            if (template == null)
+                return;
+
+            // Source rect: start from ExtSrcStartCol (col 38) to the template's right edge.
+            // This overlaps the last 3 vanilla panel cols (covering the right border) and
+            // continues into the extension area with the template's interior + right border.
+            int srcW = template.Width - ExtSrcStartCol;
+            int srcH = template.Height;
+
+            // Draw position: align so template col 38 sits at vanilla panel col 35 (= col 38 - TemplateColOffset)
+            float drawX = bar.xPositionOnScreen + VanillaPanelDrawX
+                        + (VanillaPanelSourceW - ExtOverlapCols) * 4f;
+            float drawY = bar.yPositionOnScreen;
+
+            b.Draw(
+                template,
+                new Vector2(drawX, drawY),
+                new Rectangle(ExtSrcStartCol, 0, srcW, srcH),
+                Color.White,
+                0f,
+                Vector2.Zero,
+                4f,
+                SpriteEffects.None,
+                0.89f // same depth as vanilla panel background
+            );
+        }
+
 
         /// <summary>Draw an extra fish sprite on the bobber track (no horizontal flip).</summary>
         private static void DrawExtraFish(
@@ -618,78 +578,45 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
             if (customTexture != null)
             {
-                b.Draw(
-                    customTexture,
-                    drawPos,
+                b.Draw(customTexture, drawPos,
                     new Rectangle(0, 0, customTexture.Width, customTexture.Height),
-                    Color.White,
-                    0f,
+                    Color.White, 0f,
                     new Vector2(customTexture.Width / 2f, customTexture.Height / 2f),
-                    1.75f,
-                    SpriteEffects.None,
-                    0.87f
-                );
+                    1.75f, SpriteEffects.None, 0.87f);
             }
             else
             {
-                // Fallback: vanilla fish sprite with color tint, no flip
-                b.Draw(
-                    Game1.mouseCursors,
-                    drawPos,
+                b.Draw(Game1.mouseCursors, drawPos,
                     new Rectangle(614, 1840, 20, 20),
-                    fallbackTint * 0.9f,
-                    0f,
-                    new Vector2(10f, 10f),
-                    1.75f,
-                    SpriteEffects.None,
-                    0.87f
-                );
+                    fallbackTint * 0.9f, 0f, new Vector2(10f, 10f),
+                    1.75f, SpriteEffects.None, 0.87f);
             }
         }
 
 
         /// <summary>
-        /// Draw a native-style progress bar to the right of the vanilla one.
-        /// Uses <see cref="IClickableMenu.drawTextureBox"/> for the frame
-        /// and <see cref="Utility.getRedToGreenLerpColor"/> for the fill —
-        /// the same rendering the vanilla distanceFromCatching bar uses.
+        /// Draw a progress bar fill inside the backwindow extension.
+        /// Each bar slot is <see cref="BarSlotPx"/> wide (7 source cols × 4 = 28px).
+        /// The fill is centered within the slot using <see cref="BarFillInset"/>.
+        /// Uses <see cref="Utility.getRedToGreenLerpColor"/> — same as the vanilla catch bar.
         /// </summary>
         /// <param name="barIndex">0 = first extra bar (second fish), 1 = second extra bar (third fish).</param>
         private static void DrawProgressBar(
             SpriteBatch b, BobberBar bar,
             float progress, int barIndex)
         {
-            int frameWidth = BarFillWidth + BoxBorder * 2;   // 16 + 16 = 32
-            int frameHeight = BarFillHeight + BoxBorder * 2; // 548 + 16 = 564
+            // Bar slot starts right at the vanilla panel's right edge
+            int slotX = bar.xPositionOnScreen + VanillaPanelDrawX + VanillaPanelSourceW * 4
+                      + barIndex * BarSlotPx;
+            int fillX = slotX + BarFillInset;
+            int fillY = bar.yPositionOnScreen + BarFillYOffset;
 
-            int frameX = bar.xPositionOnScreen + FirstBarFrameX
-                       + barIndex * (frameWidth + BarSpacing);
-            int frameY = bar.yPositionOnScreen + BarFrameY;
-
-            int fillX = frameX + BoxBorder;
-            int fillY = frameY + BoxBorder;
-
-            // Native Stardew Valley bordered box (same 9-slice used by menus/tooltips)
-            // Source (403, 383, 6, 6) at scale 4 → 8px corners → matches BoxBorder
-            IClickableMenu.drawTextureBox(
-                b,
-                Game1.mouseCursors,
-                new Rectangle(403, 383, 6, 6),
-                frameX, frameY,
-                frameWidth, frameHeight,
-                Color.White,
-                4f,
-                drawShadow: false,
-                draw_layer: 0.88f
-            );
-
-            // Fill from bottom up — same color gradient as vanilla distanceFromCatching bar
-            int fillHeight = (int)(progress * BarFillHeight);
-            if (fillHeight > 0)
+            int fillH = (int)(progress * BarFillHeight);
+            if (fillH > 0)
             {
                 b.Draw(
                     Game1.staminaRect,
-                    new Rectangle(fillX, fillY + BarFillHeight - fillHeight, BarFillWidth, fillHeight),
+                    new Rectangle(fillX, fillY + BarFillHeight - fillH, BarFillWidth, fillH),
                     Utility.getRedToGreenLerpColor(progress)
                 );
             }
@@ -700,7 +627,6 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         ** Private methods — state management
         *********/
 
-        /// <summary>Reset all per-minigame state.</summary>
         private static void Reset()
         {
             Armed = false;
@@ -727,7 +653,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
             CachedSecondFishTexture = null;
             CachedThirdFishTexture = null;
-
+            CachedTwoFishBg = null;
+            CachedThreeFishBg = null;
             SavedBobberPosition = 0f;
         }
     }
