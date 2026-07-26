@@ -169,8 +169,12 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         /// <summary>Whether <see cref="AdjustBobberInBar"/> forced <c>bobberInBar</c> from false to true this tick.</summary>
         private static bool ForcedInBar;
 
-        /// <summary>The first fish's catch progress as it stood before the current update tick.</summary>
+        /// <summary>The first fish's state as it stood before the current update tick.</summary>
         private static float DistanceBeforeUpdate;
+        private static Vector2 FishShakeBeforeUpdate;
+        private static bool PerfectBeforeUpdate;
+        private static int FishSizeBeforeUpdate;
+        private static int ChallengeBaitBeforeUpdate;
 
         /// <summary>The minigame currently being drawn, so draw helpers can read its position.</summary>
         private static BobberBar? CurrentBar;
@@ -303,6 +307,77 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             {
                 Monitor.Log($"Failed in {nameof(AdjustBobberInBar)}:\n{ex}", LogLevel.Error);
             }
+        }
+
+
+        /// <summary>
+        /// Apply to the first fish everything vanilla would have done to it this tick had its
+        /// <c>bobberInBar</c> not been borrowed to keep the reel sound going for another fish.
+        /// </summary>
+        /// <remarks>
+        /// A faithful transcription of the "fish outside the bar" branch of <c>BobberBar.update</c>:
+        /// the escape whip and lost <c>perfect</c>, the shrinking fish, and the catch-progress drain
+        /// with its Cork Bobber and Trap Bobber modifiers. Keeping it in step with that branch is the
+        /// price of driving the sound from the flag, but it means the first fish is punished for
+        /// drifting out of the bar exactly as it is in vanilla.
+        /// </remarks>
+        private static void ApplyOutOfBarPenalty(BobberBar bar, GameTime time)
+        {
+            // Vanilla ran its in-bar branch, which credited progress the first fish never earned.
+            bar.distanceFromCatching = DistanceBeforeUpdate;
+
+            // A Cork Bobber shields you while the treasure chest is inside the bar.
+            bool treasureInBar =
+                bar.treasure
+                && bar.treasurePosition + 12f <= bar.bobberBarPos - 32f + bar.bobberBarHeight
+                && bar.treasurePosition - 16f >= bar.bobberBarPos - 32f;
+
+            if (treasureInBar && !bar.treasureCaught && bar.bobbers.Contains("(O)693"))
+                return;
+
+            // fishShake is non-zero only if the fish was inside the bar last tick, i.e. it just left.
+            if (!FishShakeBeforeUpdate.Equals(Vector2.Zero))
+            {
+                Game1.playSound("tinyWhip");
+                bar.perfect = false;
+                Rumble.stopRumbling();
+
+                if (bar.challengeBaitFishes > 0)
+                {
+                    bar.challengeBaitFishes--;
+                    if (bar.challengeBaitFishes <= 0)
+                        bar.distanceFromCatching = 0f;
+                }
+            }
+
+            bar.fishSizeReductionTimer -= time.ElapsedGameTime.Milliseconds;
+            if (bar.fishSizeReductionTimer <= 0)
+            {
+                bar.fishSize = Math.Max(bar.minFishSize, bar.fishSize - 1);
+                bar.fishSizeReductionTimer = 800;
+            }
+
+            if ((Game1.player.fishCaught != null && Game1.player.fishCaught.Length != 0) || Game1.currentMinigame != null)
+            {
+                if (bar.bobbers.Contains("(O)694"))
+                {
+                    float reduction = 0.003f;
+                    float amount = 0.001f;
+                    for (int i = 0; i < Utility.getStringCountInList(bar.bobbers, "(O)694"); i++)
+                    {
+                        reduction -= amount;
+                        amount /= 2f;
+                    }
+
+                    bar.distanceFromCatching -= Math.Max(0.001f, reduction) * bar.distanceFromCatchPenaltyModifier;
+                }
+                else
+                {
+                    bar.distanceFromCatching -= (bar.beginnersRod ? 0.002f : 0.003f) * bar.distanceFromCatchPenaltyModifier;
+                }
+            }
+
+            bar.distanceFromCatching = Math.Max(0f, Math.Min(1f, bar.distanceFromCatching));
         }
 
 
@@ -610,6 +685,10 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     return;
 
                 DistanceBeforeUpdate = __instance.distanceFromCatching;
+                FishShakeBeforeUpdate = __instance.fishShake;
+                PerfectBeforeUpdate = __instance.perfect;
+                FishSizeBeforeUpdate = __instance.fishSize;
+                ChallengeBaitBeforeUpdate = __instance.challengeBaitFishes;
 
                 if (!FirstFishSecured || !HasUnresolvedExtras())
                     return;
@@ -627,18 +706,30 @@ namespace FishingHorizonsExpanded.Framework.Tackle
 
 
         /// <summary>POSTFIX: Spawn and simulate extra fish; keep the minigame alive until all resolve.</summary>
-        private static void AfterUpdate(BobberBar __instance)
+        private static void AfterUpdate(BobberBar __instance, GameTime time)
         {
             try
             {
                 if (!Armed || __instance.fadeIn)
                     return;
 
-                // 0. If bobberInBar was borrowed for an extra fish, the vanilla update credited the
-                //    first fish's bar for progress it didn't earn. Hold that bar where it was instead:
-                //    while another fish is being reeled in, the first fish's progress simply pauses.
-                if (ForcedInBar && !FirstFishSecured)
+                // 0. Undo the side effects of borrowing bobberInBar for the reel sound, so the first
+                //    fish behaves exactly as it does in vanilla.
+                if (FirstFishSecured && HasUnresolvedExtras())
+                {
+                    // Already won — nothing the remaining fish do may still change its outcome.
                     __instance.distanceFromCatching = DistanceBeforeUpdate;
+                    __instance.perfect = PerfectBeforeUpdate;
+                    __instance.fishSize = FishSizeBeforeUpdate;
+                    __instance.challengeBaitFishes = ChallengeBaitBeforeUpdate;
+                }
+                else if (ForcedInBar)
+                {
+                    // The first fish is out of the bar but another fish is in it, so vanilla ran its
+                    // "reeling in" branch for all three fish. Put the first fish back on the branch it
+                    // should have taken.
+                    ApplyOutOfBarPenalty(__instance, time);
+                }
 
                 // 1. Spawn second fish at 50% of the first bar
                 if (!SecondSpawned)
@@ -974,6 +1065,10 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             VanillaFishInBar = false;
             ForcedInBar = false;
             DistanceBeforeUpdate = 0f;
+            FishShakeBeforeUpdate = Vector2.Zero;
+            PerfectBeforeUpdate = false;
+            FishSizeBeforeUpdate = 0;
+            ChallengeBaitBeforeUpdate = 0;
             CurrentBar = null;
         }
     }
