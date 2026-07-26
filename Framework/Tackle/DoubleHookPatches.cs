@@ -33,11 +33,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
     /// <para>Each extra fish gets an identical bar shifted right by <see cref="BarSpacing"/> px.</para>
     ///
     /// <para>The translucent bubble behind the minigame is vanilla's first draw call —
-    /// <c>mouseCursors</c> source <c>(652, 1685, 52, 157)</c> at <c>Color.White * 0.6f * scale</c>.
-    /// A transpiler swaps that one call for the mod's wider bubble sprites, which are the same
-    /// artwork widened by exactly <see cref="BubbleWidenPerBar"/> source px per extra bar. Because the
-    /// source rect is the only thing that changes, position/origin/scale/alpha/flip all stay vanilla,
-    /// and the bubble keeps its exact 48px margin to the right of the last bar.</para>
+    /// <c>mouseCursors</c> source <c>(652, 1685, 52, 157)</c> at <c>Color.White * 0.6f * scale</c>,
+    /// and the wooden frame is the second — source <c>(644, 1999, 38, 150)</c>. A transpiler routes
+    /// both through <see cref="DrawSprite"/>, which substitutes wider variants of the same artwork.
+    /// Only the texture and source rect change, so position/origin/scale/alpha/flip stay vanilla and
+    /// both sprites simply extend further to the right.</para>
     ///
     /// State is static because the bobber bar minigame only ever runs for the local player.
     /// All patches swallow their own exceptions, so a failure can never crash the game.
@@ -76,25 +76,17 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         private const int BarHeight = 580;
 
         /// <summary>
-        /// Horizontal step between catch bars. 24px = 6 source px at 4× scale, which is exactly how
-        /// much wider each bubble template is per extra bar — so the bubble's right margin stays at
-        /// the vanilla 48px no matter how many bars are showing.
+        /// Horizontal step between catch bars, in screen px.
+        /// <para>Derived from the frame artwork, which is the authority on where a bar may sit: the
+        /// wooden frame repeats a 7px unit (3 wood columns + a 4px dark bar channel). At 4× scale
+        /// that is 28px. The frame's first channel sits at source cols 32-35, which maps to screen
+        /// <c>x+124 .. x+140</c> — exactly vanilla's bar — confirming the alignment.</para>
         /// </summary>
-        private const int BarSpacing = 24;
+        private const int BarSpacing = 28;
 
-        /// <summary>Source px the bubble sprite widens per extra bar (<see cref="BarSpacing"/> / 4).</summary>
-        private const int BubbleWidenPerBar = BarSpacing / 4;
-
-        /// <summary>Vanilla bubble source rect in <c>Game1.mouseCursors</c>.</summary>
+        /// <summary>Vanilla source rects in <c>Game1.mouseCursors</c> that the mod swaps out.</summary>
         private static readonly Rectangle VanillaBubbleSource = new Rectangle(652, 1685, 52, 157);
-
-        /// <summary>
-        /// Content bounds inside the mod's bubble templates. Both templates place the artwork at
-        /// (3, 2) and are exactly 157px tall — identical to the vanilla sprite — so passing this as
-        /// the source rect makes them drop-in replacements that only extend to the right.
-        /// </summary>
-        private static readonly Rectangle TwoFishBubbleSource = new Rectangle(3, 2, 52 + BubbleWidenPerBar, 157);
-        private static readonly Rectangle ThreeFishBubbleSource = new Rectangle(3, 2, 52 + BubbleWidenPerBar * 2, 157);
+        private static readonly Rectangle VanillaPanelSource = new Rectangle(644, 1999, 38, 150);
 
 
         /*********
@@ -104,6 +96,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         public const string ThirdFishTextureAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThirdFish";
         public const string TwoFishBubbleAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/TwoFishBubble";
         public const string ThreeFishBubbleAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishBubble";
+        public const string TwoFishFrameAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/TwoFishFrame";
+        public const string ThreeFishFrameAsset = "Mods/waymeeNhaku.FishingHorizonsExpanded/ThreeFishFrame";
 
 
         /*********
@@ -148,6 +142,11 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         private static Texture2D? CachedThirdFishTexture;
         private static Texture2D? CachedTwoFishBubble;
         private static Texture2D? CachedThreeFishBubble;
+        private static Texture2D? CachedTwoFishFrame;
+        private static Texture2D? CachedThreeFishFrame;
+
+        /// <summary>Cached opaque bounding boxes, keyed by texture. See <see cref="GetContentBounds"/>.</summary>
+        private static readonly Dictionary<Texture2D, Rectangle> ContentBoundsCache = new Dictionary<Texture2D, Rectangle>();
 
         // -- temporary draw state --
         private static float SavedBobberPosition;
@@ -200,10 +199,15 @@ namespace FishingHorizonsExpanded.Framework.Tackle
         *********/
 
         /// <summary>
-        /// Redirect the <em>first</em> <c>SpriteBatch.Draw</c> call in <c>BobberBar.draw</c> — the
-        /// translucent bubble behind the minigame — through <see cref="DrawBubble"/> so we can swap
-        /// in a wider sprite when extra fish are in play. Every other draw call is left untouched.
+        /// Route every <c>SpriteBatch.Draw</c> call in <c>BobberBar.draw</c> that uses the
+        /// nine-argument float-scale overload through <see cref="DrawSprite"/>, which swaps in wider
+        /// artwork for the translucent bubble and the wooden frame when extra fish are in play.
         /// </summary>
+        /// <remarks>
+        /// Every call site is redirected rather than a specific one by index, so the patch does not
+        /// break if the game reorders its draw calls. <see cref="DrawSprite"/> decides what to do
+        /// based on the source rect and forwards anything it does not recognise untouched.
+        /// </remarks>
         private static IEnumerable<CodeInstruction> TranspileDraw(IEnumerable<CodeInstruction> instructions)
         {
             var target = AccessTools.Method(typeof(SpriteBatch), nameof(SpriteBatch.Draw), new[]
@@ -211,16 +215,16 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 typeof(Texture2D), typeof(Vector2), typeof(Rectangle?), typeof(Color),
                 typeof(float), typeof(Vector2), typeof(float), typeof(SpriteEffects), typeof(float)
             });
-            var replacement = AccessTools.Method(typeof(DoubleHookPatches), nameof(DrawBubble));
+            var replacement = AccessTools.Method(typeof(DoubleHookPatches), nameof(DrawSprite));
 
-            bool patched = false;
+            int patched = 0;
             foreach (var instruction in instructions)
             {
-                if (!patched && instruction.Calls(target))
+                if (instruction.Calls(target))
                 {
-                    patched = true;
-                    // Stack layout is identical (SpriteBatch is passed as the first argument),
-                    // so we only swap the callvirt for a call to our static method.
+                    patched++;
+                    // Stack layout is identical (the SpriteBatch is already on the stack as the
+                    // instance), so we only swap the callvirt for a call to our static method.
                     yield return new CodeInstruction(OpCodes.Call, replacement)
                     {
                         labels = instruction.labels,
@@ -232,54 +236,99 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                 yield return instruction;
             }
 
-            if (!patched)
-                Monitor.Log("Could not find the bubble draw call in BobberBar.draw — the bubble will not widen for extra fish.", LogLevel.Warn);
+            if (patched == 0)
+                Monitor.Log("Could not find any draw calls to patch in BobberBar.draw — the bubble and frame will not widen for extra fish.", LogLevel.Warn);
         }
 
 
         /// <summary>
-        /// Stand-in for vanilla's bubble draw call. Swaps the texture and source rect for a wider
-        /// bubble when extra fish are active; otherwise forwards to vanilla unchanged.
+        /// Stand-in for vanilla's sprite draw calls in <c>BobberBar.draw</c>. When extra fish are in
+        /// play, swaps the translucent bubble and the wooden frame for their wider variants;
+        /// everything else is forwarded to vanilla unchanged.
         /// </summary>
-        internal static void DrawBubble(
+        /// <remarks>
+        /// Only the texture and source rect change — position, origin, scale, colour, rotation, flip
+        /// and depth all stay exactly as vanilla passed them. Because every template has the same
+        /// content height as the sprite it replaces and is anchored on its left edge, the artwork
+        /// simply extends further to the right.
+        /// </remarks>
+        internal static void DrawSprite(
             SpriteBatch b, Texture2D texture, Vector2 position, Rectangle? sourceRectangle,
             Color color, float rotation, Vector2 origin, float scale, SpriteEffects effects, float layerDepth)
         {
             try
             {
-                // Only intercept the bubble itself — never any other sprite that reaches this call site.
-                if (Armed && sourceRectangle == VanillaBubbleSource)
+                int extras = Armed ? SpawnedExtraCount() : 0;
+                if (extras > 0)
                 {
-                    Texture2D? wider = null;
-                    Rectangle widerSource = default;
+                    Texture2D? swap = null;
 
-                    switch (SpawnedExtraCount())
-                    {
-                        case 1:
-                            wider = CachedTwoFishBubble;
-                            widerSource = TwoFishBubbleSource;
-                            break;
-                        case 2:
-                            wider = CachedThreeFishBubble;
-                            widerSource = ThreeFishBubbleSource;
-                            break;
-                    }
+                    if (sourceRectangle == VanillaBubbleSource)
+                        swap = extras == 1 ? CachedTwoFishBubble : CachedThreeFishBubble;
+                    else if (sourceRectangle == VanillaPanelSource)
+                        swap = extras == 1 ? CachedTwoFishFrame : CachedThreeFishFrame;
 
-                    if (wider != null)
+                    if (swap != null)
                     {
-                        // Identical position/origin/scale/alpha/flip — only the artwork is wider,
-                        // so the bubble simply extends further right.
-                        b.Draw(wider, position, widerSource, color, rotation, origin, scale, effects, layerDepth);
+                        b.Draw(swap, position, GetContentBounds(swap), color, rotation, origin, scale, effects, layerDepth);
                         return;
                     }
                 }
             }
             catch (Exception ex)
             {
-                Monitor.Log($"Failed in {nameof(DrawBubble)}:\n{ex}", LogLevel.Error);
+                Monitor.Log($"Failed in {nameof(DrawSprite)}:\n{ex}", LogLevel.Error);
             }
 
             b.Draw(texture, position, sourceRectangle, color, rotation, origin, scale, effects, layerDepth);
+        }
+
+
+        /// <summary>
+        /// Get the opaque bounding box of a texture, ignoring transparent padding around the artwork.
+        /// </summary>
+        /// <remarks>
+        /// Using the measured content box rather than the whole canvas means the templates can be
+        /// exported with any amount of padding and still line up perfectly — no code change needed
+        /// when the art is re-exported. Results are cached; the scan runs once per texture.
+        /// </remarks>
+        private static Rectangle GetContentBounds(Texture2D texture)
+        {
+            if (ContentBoundsCache.TryGetValue(texture, out Rectangle cached))
+                return cached;
+
+            Rectangle bounds;
+            try
+            {
+                Color[] data = new Color[texture.Width * texture.Height];
+                texture.GetData(data);
+
+                int minX = texture.Width, minY = texture.Height, maxX = -1, maxY = -1;
+                for (int y = 0; y < texture.Height; y++)
+                {
+                    for (int x = 0; x < texture.Width; x++)
+                    {
+                        if (data[y * texture.Width + x].A == 0)
+                            continue;
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+
+                bounds = maxX < 0
+                    ? new Rectangle(0, 0, texture.Width, texture.Height)
+                    : new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log($"Could not measure texture bounds, falling back to the full canvas:\n{ex}", LogLevel.Warn);
+                bounds = new Rectangle(0, 0, texture.Width, texture.Height);
+            }
+
+            ContentBoundsCache[texture] = bounds;
+            return bounds;
         }
 
 
@@ -319,13 +368,18 @@ namespace FishingHorizonsExpanded.Framework.Tackle
                     CachedThirdFishTexture = ContentHelper.Load<Texture2D>(ThirdFishTextureAsset);
                     CachedTwoFishBubble = ContentHelper.Load<Texture2D>(TwoFishBubbleAsset);
                     CachedThreeFishBubble = ContentHelper.Load<Texture2D>(ThreeFishBubbleAsset);
+                    CachedTwoFishFrame = ContentHelper.Load<Texture2D>(TwoFishFrameAsset);
+                    CachedThreeFishFrame = ContentHelper.Load<Texture2D>(ThreeFishFrameAsset);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Monitor.Log($"Could not load the multi-fish UI textures, falling back to vanilla art:\n{ex}", LogLevel.Warn);
                     CachedSecondFishTexture = null;
                     CachedThirdFishTexture = null;
                     CachedTwoFishBubble = null;
                     CachedThreeFishBubble = null;
+                    CachedTwoFishFrame = null;
+                    CachedThreeFishFrame = null;
                 }
             }
             catch (Exception ex)
@@ -692,6 +746,8 @@ namespace FishingHorizonsExpanded.Framework.Tackle
             CachedThirdFishTexture = null;
             CachedTwoFishBubble = null;
             CachedThreeFishBubble = null;
+            CachedTwoFishFrame = null;
+            CachedThreeFishFrame = null;
             SavedBobberPosition = 0f;
         }
     }
