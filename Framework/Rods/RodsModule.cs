@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using FishingHorizonsExpanded.Framework;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -9,18 +10,17 @@ using StardewValley.GameData.Tools;
 
 namespace FishingHorizonsExpanded.Framework.Rods
 {
-    /// <summary>Custom fishing rods (first step of the modular rod system from the design doc).</summary>
+    /// <summary>Custom fishing rods, added as <c>Data/Tools</c> entries alongside the vanilla ones.</summary>
     /// <remarks>
-    /// Vanilla rods are kept untouched so removing the mod never breaks a save — custom rods are
-    /// added as separate <c>Data/Tools</c> entries next to them.
+    /// Vanilla rods are left untouched so removing the mod never breaks a save.
     ///
-    /// Current rods:
-    /// <list type="bullet">
-    /// <item><b>Feeder Rod</b> — an advanced rod with both bait and tackle slots (UpgradeLevel 3,
-    /// same tier as iridium). Its gimmick: an inherent chance to hook a second fish during the
-    /// minigame, even without the Double Hook tackle. When the Double Hook IS equipped, a third
-    /// fish can appear. Sold by Willy once the player reaches fishing level 4.</item>
-    /// </list>
+    /// Every rod is described by one <see cref="RodDefinition"/> in <see cref="AllRods"/>; the module
+    /// does the rest. To add a rod, copy the template at the bottom of the rod list — the checklist is
+    /// in <c>docs/adding-a-rod.md</c>.
+    ///
+    /// A new rod is a plain fishing rod with its own art, price and tier. The extra-fish mechanic is
+    /// deliberately not part of this: it is the feeder rod's gimmick, and
+    /// <see cref="Tackle.DoubleHookPatches"/> arms it by looking for that rod's ID specifically.
     /// </remarks>
     internal sealed class RodsModule : IModule
     {
@@ -30,7 +30,7 @@ namespace FishingHorizonsExpanded.Framework.Rods
         /// <summary>The unqualified tool ID of the feeder rod.</summary>
         public const string FeederRodId = "waymeeNhaku.FHE_FeederRod";
 
-        /// <summary>The qualified tool ID of the feeder rod.</summary>
+        /// <summary>The qualified tool ID of the feeder rod, used by the extra-fish mechanic.</summary>
         public const string FeederRodQualifiedId = "(T)" + FeederRodId;
 
         /// <summary>The asset name of the feeder rod texture.</summary>
@@ -39,14 +39,55 @@ namespace FishingHorizonsExpanded.Framework.Rods
         /// <summary>Willy's shop ID in <c>Data/Shops</c>.</summary>
         private const string FishShopId = "FishShop";
 
-        /// <summary>The feeder rod's price in Willy's shop (fiberglass is 1 800g, iridium is 7 500g).</summary>
-        private const int FeederRodShopPrice = 5000;
 
-        /// <summary>The fishing level required before Willy sells the feeder rod (fiberglass is 2, iridium is 6).</summary>
-        private const int FeederRodFishingLevel = 4;
+        /*********
+        ** The rods
+        *********/
+        /// <summary>
+        /// Every custom rod in the mod. Add one entry per rod; the module registers them all.
+        /// </summary>
+        public static readonly RodDefinition[] AllRods =
+        {
+            // --- Feeder Rod ---
+            // An advanced rod at the iridium tier, with an inherent chance to hook a second fish
+            // mid-minigame even without the Double Hook. That mechanic is unique to this rod and is
+            // driven from DoubleHookPatches, not from anything in this file.
+            new RodDefinition(
+                Id: FeederRodId,
+                Name: "FeederRod",
+                TextureAsset: FeederRodTextureAssetName,
+                TexturePath: "assets/feeder-rod.png",
+                TranslationKey: "item.feeder-rod",
+                Price: 5000,          // fibreglass is 1 800g, iridium 7 500g
+                FishingLevel: 4)      // fibreglass needs 2, iridium 6
+            {
+                UpgradeLevel = 3,
+                CastingTint = new Color(80, 140, 60),
+                IsEnabled = config => config.EnableFeederRod
+            },
 
-        /// <summary>The tint baked into the grayscale casting animation (olive green for a feeder rod look).</summary>
-        private static readonly Color FeederTint = new(80, 140, 60);
+            // ------------------------------------------------------------------
+            // TEMPLATE — copy this block, uncomment it, change the values, done.
+            // It also needs assets/example-rod.png and the two item.example-rod
+            // keys in i18n/. Full checklist: docs/adding-a-rod.md
+            // ------------------------------------------------------------------
+            // new RodDefinition(
+            //     Id: "waymeeNhaku.FHE_ExampleRod",         // must stay globally unique
+            //     Name: "ExampleRod",
+            //     TextureAsset: "Mods/waymeeNhaku.FishingHorizonsExpanded/ExampleRod",
+            //     TexturePath: "assets/example-rod.png",    // a 16x16 icon is enough
+            //     TranslationKey: "item.example-rod",
+            //     Price: 3000,
+            //     FishingLevel: 3)
+            // {
+            //     UpgradeLevel = 2,                         // 2 = bait slot only, 3 = bait + tackle
+            //     CastingTint = new Color(150, 110, 70)     // omit for the vanilla colour of that tier
+            //
+            //     // Optional: to make the rod switchable, add a bool to ModConfig, then add
+            //     //     IsEnabled = config => config.EnableExampleRod
+            //     // here. Left out, the rod is always on.
+            // },
+        };
 
 
         /*********
@@ -63,7 +104,7 @@ namespace FishingHorizonsExpanded.Framework.Rods
         public string Name => "Rods";
 
         /// <inheritdoc/>
-        public bool IsEnabled => this.Mod.Config.EnableFeederRod;
+        public bool IsEnabled => AllRods.Any(rod => rod.Enabled(this.Mod.Config));
 
 
         /*********
@@ -77,55 +118,65 @@ namespace FishingHorizonsExpanded.Framework.Rods
         /// <inheritdoc/>
         public void Activate(IModHelper helper)
         {
-            // The feeder rod's fish-catching mechanic is handled entirely by DoubleHookPatches
-            // (which detects the feeder rod in the constructor postfix). No separate Harmony
-            // patches needed here — only asset injection.
+            RodPatches.Apply(this.Mod.ModManifest.UniqueID, this.Mod.Monitor, FindRod);
 
             helper.Events.Content.AssetRequested += this.OnAssetRequested;
             helper.Events.Content.LocaleChanged += this.OnLocaleChanged;
+        }
+
+        /// <summary>Find the custom rod with the given qualified tool ID, or <c>null</c> if it isn't one of ours.</summary>
+        public static RodDefinition? FindRod(string? qualifiedId)
+        {
+            if (string.IsNullOrEmpty(qualifiedId))
+                return null;
+
+            foreach (RodDefinition rod in AllRods)
+            {
+                if (rod.QualifiedId == qualifiedId)
+                    return rod;
+            }
+
+            return null;
         }
 
 
         /*********
         ** Private methods
         *********/
-        /// <summary>Add the feeder rod tool, its texture, and Willy's shop entry.</summary>
+        /// <summary>Add each enabled rod's tool entry, texture and shop listing.</summary>
         private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
         {
             if (!this.IsEnabled)
                 return;
 
-            // tool definition
+            // tool definitions
             if (e.NameWithoutLocale.IsEquivalentTo("Data/Tools"))
             {
                 e.Edit(asset =>
                 {
                     var data = asset.AsDictionary<string, ToolData>().Data;
-                    data[FeederRodId] = new ToolData
+                    foreach (RodDefinition rod in this.EnabledRods())
                     {
-                        ClassName = "FishingRod",
-                        Name = "FeederRod",
-                        DisplayName = this.Mod.Helper.Translation.Get("item.feeder-rod.name"),
-                        Description = this.Mod.Helper.Translation.Get("item.feeder-rod.description"),
-                        Texture = FeederRodTextureAssetName,
-                        SpriteIndex = 0,
-                        MenuSpriteIndex = -1,
-                        SalePrice = FeederRodShopPrice,
-                        UpgradeLevel = 3, // iridium tier: one bait slot + one tackle slot
-                        CanBeLostOnDeath = false
-                    };
+                        data[rod.Id] = new ToolData
+                        {
+                            ClassName = "FishingRod",
+                            Name = rod.Name,
+                            DisplayName = this.Mod.Helper.Translation.Get($"{rod.TranslationKey}.name"),
+                            Description = this.Mod.Helper.Translation.Get($"{rod.TranslationKey}.description"),
+                            Texture = rod.TextureAsset,
+                            SpriteIndex = 0,
+                            MenuSpriteIndex = -1,
+                            SalePrice = rod.Price,
+                            UpgradeLevel = rod.UpgradeLevel,
+                            CanBeLostOnDeath = false
+                        };
+                    }
                 });
+                return;
             }
 
-            // tool texture
-            else if (e.NameWithoutLocale.IsEquivalentTo(FeederRodTextureAssetName))
-            {
-                e.LoadFromModFile<Texture2D>("assets/feeder-rod.png", AssetLoadPriority.Exclusive);
-                e.Edit(this.AddCastingAnimation, AssetEditPriority.Late);
-            }
-
-            // Willy's shop entry
-            else if (e.NameWithoutLocale.IsEquivalentTo("Data/Shops"))
+            // Willy's shop entries
+            if (e.NameWithoutLocale.IsEquivalentTo("Data/Shops"))
             {
                 e.Edit(asset =>
                 {
@@ -133,29 +184,55 @@ namespace FishingHorizonsExpanded.Framework.Rods
                     if (!data.TryGetValue(FishShopId, out ShopData? shop))
                         return;
 
-                    shop.Items.Add(new ShopItemData
+                    foreach (RodDefinition rod in this.EnabledRods())
                     {
-                        Id = FeederRodId,
-                        ItemId = FeederRodQualifiedId,
-                        Price = FeederRodShopPrice,
-                        Condition = $"PLAYER_FISHING_LEVEL Current {FeederRodFishingLevel}"
-                    });
+                        shop.Items.Add(new ShopItemData
+                        {
+                            Id = rod.Id,
+                            ItemId = rod.QualifiedId,
+                            Price = rod.Price,
+                            Condition = $"PLAYER_FISHING_LEVEL Current {rod.FishingLevel}"
+                        });
+                    }
                 });
+                return;
+            }
+
+            // tool textures
+            foreach (RodDefinition rod in this.EnabledRods())
+            {
+                if (!e.NameWithoutLocale.IsEquivalentTo(rod.TextureAsset))
+                    continue;
+
+                RodDefinition target = rod;
+                e.LoadFromModFile<Texture2D>(target.TexturePath, AssetLoadPriority.Exclusive);
+                e.Edit(asset => this.AddCastingAnimation(asset, target), AssetEditPriority.Late);
+                return;
             }
         }
 
-        /// <summary>Copy the vanilla rod casting/reeling animation into the feeder rod's texture, tinted.</summary>
+        /// <summary>Get the rods switched on in the current config.</summary>
+        private RodDefinition[] EnabledRods()
+        {
+            return AllRods.Where(rod => rod.Enabled(this.Mod.Config)).ToArray();
+        }
+
+        /// <summary>Copy the vanilla casting/reeling animation into a rod's texture, tinted to taste.</summary>
         /// <remarks>
-        /// The in-hand cast/reel animation isn't drawn from the 16×16 item sprite: <c>Game1.drawTool</c> samples
-        /// 48×48 frames from the tool's own texture at the same coordinates as the vanilla <c>TileSheets/tools</c>
-        /// sheet (rows y = 240–384). Those vanilla frames are grayscale, and the game tints them with one color
-        /// from <c>FishingRod.getColor()</c>, hardcoded by upgrade level. Our rod uses UpgradeLevel 3 → tint is
-        /// violet (same as iridium rod), so we bake our own olive green tint ourselves: extend our texture to the
-        /// vanilla sheet size, copy the grayscale animation region from the player's own game files at runtime,
-        /// and multiply it by <see cref="FeederTint"/>. The 16×16 icon at sprite index 0 stays untouched,
-        /// so WayMee's art only needs to be the inventory icon.
+        /// The in-hand animation isn't drawn from the 16×16 item sprite: <c>Game1.drawTool</c> samples
+        /// 48×48 frames from the tool's own texture at the same coordinates as the vanilla
+        /// <c>TileSheets/tools</c> sheet (rows y = 240–384). So each custom rod's texture is extended to
+        /// the vanilla sheet's size and those rows are copied across from the player's own game files at
+        /// runtime, which keeps the animation correct for whatever tool recolour they have installed.
+        /// Only the 16×16 icon at sprite index 0 has to be drawn by hand.
+        ///
+        /// Vanilla's frames are greyscale and get their colour from <c>FishingRod.getColor()</c> at draw
+        /// time. When a rod sets its own <see cref="RodDefinition.CastingTint"/> the tint is multiplied
+        /// into the pixels here and <see cref="RodPatches"/> forces that draw colour to white, so the
+        /// authored colour is what appears on screen. With no tint the greyscale is left alone and
+        /// vanilla colours it by tier.
         /// </remarks>
-        private void AddCastingAnimation(IAssetData asset)
+        private void AddCastingAnimation(IAssetData asset, RodDefinition rod)
         {
             try
             {
@@ -171,17 +248,20 @@ namespace FishingHorizonsExpanded.Framework.Rods
                 var pixels = new Color[region.Width * region.Height];
                 vanilla.GetData(0, region, pixels, 0, pixels.Length);
 
-                for (int i = 0; i < pixels.Length; i++)
+                if (rod.CastingTint is Color tint)
                 {
-                    Color p = pixels[i];
-                    if (p.A == 0)
-                        continue;
-                    pixels[i] = new Color(
-                        p.R * FeederTint.R / 255,
-                        p.G * FeederTint.G / 255,
-                        p.B * FeederTint.B / 255,
-                        p.A
-                    );
+                    for (int i = 0; i < pixels.Length; i++)
+                    {
+                        Color p = pixels[i];
+                        if (p.A == 0)
+                            continue;
+                        pixels[i] = new Color(
+                            p.R * tint.R / 255,
+                            p.G * tint.G / 255,
+                            p.B * tint.B / 255,
+                            p.A
+                        );
+                    }
                 }
 
                 editor.Data.SetData(0, region, pixels, 0, pixels.Length);
@@ -189,12 +269,12 @@ namespace FishingHorizonsExpanded.Framework.Rods
             catch (Exception ex)
             {
                 this.Mod.Monitor.Log(
-                    $"Failed building the feeder rod casting animation; the rod may be invisible while casting.\n{ex}",
+                    $"Failed building the casting animation for {rod.Name}; the rod may be invisible while casting.\n{ex}",
                     LogLevel.Warn);
             }
         }
 
-        /// <summary>Reload the tool data so its name/description use the new language.</summary>
+        /// <summary>Reload the tool data so names and descriptions pick up the new language.</summary>
         private void OnLocaleChanged(object? sender, LocaleChangedEventArgs e)
         {
             this.Mod.Helper.GameContent.InvalidateCache("Data/Tools");
